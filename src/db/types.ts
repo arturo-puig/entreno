@@ -22,7 +22,9 @@ export type Equipment =
   | 'Banco'
   | 'Peso corporal'
   | 'Cinta'
-  | 'Bicicleta fija';
+  | 'Bicicleta fija'
+  | 'Bicicleta'
+  | 'Paleta';
 
 export type MovementType =
   | 'Sentadilla'
@@ -167,6 +169,8 @@ export interface SessionItem {
 
 export interface Session {
   id: string;
+  /** actividad = pádel, bici, caminata… registrada en un toque (no es una rutina del gimnasio). */
+  kind?: 'entrenamiento' | 'actividad';
   /** registro = hecho con la app; historico = cargado a partir de tus notas */
   source: 'registro' | 'historico';
   /** AAAA-MM-DD; null = fecha desconocida */
@@ -186,6 +190,27 @@ export interface Session {
   currentIndex?: number;
   /** Fin del descanso en curso (hora absoluta: no se desfasa si la pantalla se apaga). */
   restEndsAt?: string;
+}
+
+/** Peso corporal y cintura (opcional). Un registro por día. */
+export interface BodyMetric {
+  id: string;
+  date: string; // AAAA-MM-DD
+  weightKg?: number;
+  waistCm?: number;
+  createdAt: string;
+}
+
+/** Registro local de lo que le pediste al asistente (para mejorarlo con datos reales). */
+export interface AssistantLogEntry {
+  id: string;
+  at: string;
+  text: string;
+  intent: string;
+  /** Qué parte decidió: reglas (único motor por ahora). */
+  decidedBy: 'reglas';
+  entities?: Record<string, unknown>;
+  feedback?: 'util' | 'no-util';
 }
 
 export interface Prefs {

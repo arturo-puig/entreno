@@ -3,18 +3,19 @@ import { db } from './db';
 export const EXPORT_FORMAT_VERSION = 1;
 
 export async function buildExport() {
-  const [exercises, routines, sessions, days, meta] = await Promise.all([
+  const [exercises, routines, sessions, days, meta, bodyMetrics] = await Promise.all([
     db.exercises.toArray(),
     db.routines.toArray(),
     db.sessions.toArray(),
     db.days.toArray(),
     db.meta.toArray(),
+    db.bodyMetrics.toArray(),
   ]);
   return {
     app: 'entreno',
     formatVersion: EXPORT_FORMAT_VERSION,
     exportedAt: new Date().toISOString(),
-    tables: { exercises, routines, sessions, days, meta },
+    tables: { exercises, routines, sessions, days, meta, bodyMetrics },
   };
 }
 
@@ -73,13 +74,16 @@ export function validateBackup(raw: unknown): BackupCheck | { ok: false; error: 
 /** Reemplaza todos los datos por los de la copia. Tus videos y fotos no se tocan. */
 export async function replaceAllData(data: BackupData, database = db): Promise<void> {
   const t: Tables = data.tables;
-  await database.transaction('rw', [database.exercises, database.routines, database.sessions, database.days, database.meta], async () => {
-    await Promise.all([database.exercises.clear(), database.routines.clear(), database.sessions.clear(), database.days.clear(), database.meta.clear()]);
+  const tables = [database.exercises, database.routines, database.sessions, database.days, database.meta, database.bodyMetrics];
+  await database.transaction('rw', tables, async () => {
+    await Promise.all(tables.map((tb) => tb.clear()));
     await database.exercises.bulkPut(t.exercises);
     await database.routines.bulkPut(t.routines);
     await database.sessions.bulkPut(t.sessions);
     await database.days.bulkPut(t.days);
     await database.meta.bulkPut(t.meta);
+    // Las copias de antes del registro de peso no traen esta tabla.
+    await database.bodyMetrics.bulkPut(t.bodyMetrics ?? []);
   });
 }
 

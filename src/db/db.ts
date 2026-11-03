@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { DayPlan, DayState, Exercise, MetaEntry, Routine, Session, UserMedia } from './types';
+import type { AssistantLogEntry, BodyMetric, DayPlan, DayState, Exercise, MetaEntry, Routine, Session, UserMedia } from './types';
 import { EXERCISES } from '../data/exercises';
 import { ROUTINES, WEEK_PLAN } from '../data/routines';
 import { HISTORY } from '../data/history';
@@ -12,6 +12,8 @@ export class EntrenoDB extends Dexie {
   days!: Table<DayState, string>;
   meta!: Table<MetaEntry, string>;
   userMedia!: Table<UserMedia, string>;
+  bodyMetrics!: Table<BodyMetric, string>;
+  assistantLog!: Table<AssistantLogEntry, string>;
 
   constructor(name = 'entreno') {
     super(name);
@@ -25,13 +27,15 @@ export class EntrenoDB extends Dexie {
     });
     // v2: videos y fotos propios por ejercicio.
     this.version(2).stores({ userMedia: 'id, exerciseId' });
+    // v3: peso corporal y registro del asistente.
+    this.version(3).stores({ bodyMetrics: 'id, date', assistantLog: 'id, at' });
   }
 }
 
 export const db = new EntrenoDB();
 
 /** Subir este número cuando se agreguen ejercicios, rutinas o variantes a la carga inicial. */
-export const SEED_REVISION = 2;
+export const SEED_REVISION = 3;
 
 /**
  * Agrega lo que falte de la carga inicial sin pisar nada que ya exista,

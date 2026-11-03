@@ -4,10 +4,10 @@ import { EntrenoDB, ensureSeed } from './db';
 import { backupReminder, replaceAllData, validateBackup } from './backup';
 
 async function exportOf(db: EntrenoDB) {
-  const [exercises, routines, sessions, days, meta] = await Promise.all([
-    db.exercises.toArray(), db.routines.toArray(), db.sessions.toArray(), db.days.toArray(), db.meta.toArray(),
+  const [exercises, routines, sessions, days, meta, bodyMetrics] = await Promise.all([
+    db.exercises.toArray(), db.routines.toArray(), db.sessions.toArray(), db.days.toArray(), db.meta.toArray(), db.bodyMetrics.toArray(),
   ]);
-  return { app: 'entreno', formatVersion: 1, exportedAt: '2026-11-03T12:00:00.000Z', tables: { exercises, routines, sessions, days, meta } };
+  return { app: 'entreno', formatVersion: 1, exportedAt: '2026-11-03T12:00:00.000Z', tables: { exercises, routines, sessions, days, meta, bodyMetrics } };
 }
 
 describe('validar copias', () => {
@@ -41,7 +41,9 @@ describe('importar', () => {
     await target.routines.delete('rutina-b');
     await target.userMedia.add({ id: 'm1', exerciseId: 'dead-bug', kind: 'imagen', mime: 'image/png', blob: new Blob(['x']), size: 1, createdAt: '' });
 
+    await target.bodyMetrics.add({ id: 'x', date: '2026-11-01', weightKg: 99, createdAt: '' });
     await replaceAllData(backup as never, target);
+    expect(await target.bodyMetrics.count()).toBe(0); // la copia manda
     expect((await target.routines.get('rutina-a'))?.name).toBe('Rutina A del backup');
     expect(await target.routines.get('rutina-b')).toBeDefined();
     expect(await target.userMedia.count()).toBe(1);
@@ -58,5 +60,22 @@ describe('recordatorio de copia', () => {
     expect(backupReminder({ hasSessions: true, lastExportAt: '2026-11-05T12:00:00Z', now })).toBeNull();
     expect(backupReminder({ hasSessions: false, now })).toBeNull();
     expect(backupReminder({ hasSessions: true, snoozedUntil: '2026-11-12T00:00:00Z', now })).toBeNull();
+  });
+});
+
+describe('copias viejas', () => {
+  it('importa una copia sin la tabla de peso corporal', async () => {
+    const source = new EntrenoDB(`old-${Math.random()}`);
+    await ensureSeed(source);
+    const backup = await exportOf(source);
+    const { bodyMetrics: _omit, ...oldTables } = backup.tables;
+    const r = validateBackup({ ...backup, tables: oldTables });
+    expect(r.ok).toBe(true);
+    const target = new EntrenoDB(`old-dst-${Math.random()}`);
+    await ensureSeed(target);
+    if (r.ok) await replaceAllData(r.data, target);
+    expect(await target.routines.count()).toBe(5);
+    source.close();
+    target.close();
   });
 });

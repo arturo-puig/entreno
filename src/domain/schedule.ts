@@ -21,7 +21,10 @@ export function countsAsDone(s: Session): boolean {
 export interface WeekDay {
   date: string;
   plan: DayPlan;
+  /** Hiciste algo ese día (gimnasio o actividad). */
   done: boolean;
+  gym: boolean;
+  activity: boolean;
   isToday: boolean;
   isPast: boolean;
 }
@@ -32,10 +35,15 @@ export function weekOverview(weekPlan: DayPlan[], sessions: Session[], today: Da
   return Array.from({ length: 7 }, (_, i) => {
     const d = addDays(monday, i);
     const iso = toISODate(d);
+    const day = sessions.filter((s) => s.date === iso && countsAsDone(s));
+    const gym = day.some((s) => s.kind !== 'actividad');
+    const activity = day.some((s) => s.kind === 'actividad');
     return {
       date: iso,
       plan: planFor(weekPlan, d),
-      done: sessions.some((s) => s.date === iso && countsAsDone(s)),
+      done: gym || activity,
+      gym,
+      activity,
       isToday: iso === todayIso,
       isPast: iso < todayIso,
     };
@@ -65,7 +73,7 @@ export function missedProfessorRoutine(params: {
   const todayIso = toISODate(today);
   const weekStart = toISODate(startOfWeek(today));
   const thisWeek = sessions.filter((s) => s.date !== null && s.date >= weekStart && s.date <= todayIso);
-  if (thisWeek.some((s) => s.date === todayIso && countsAsDone(s))) return undefined;
+  if (thisWeek.some((s) => s.date === todayIso && countsAsDone(s) && s.kind !== 'actividad')) return undefined;
 
   for (const d of weekOverview(weekPlan, sessions, today)) {
     if (!d.isPast) break;

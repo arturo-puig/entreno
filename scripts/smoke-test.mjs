@@ -474,12 +474,88 @@ try {
     const dialog = page.getByRole('dialog');
     check('borrar todo: pide escribir «borrar»', await dialog.getByRole('button', { name: 'Borrar todo' }).isDisabled());
     await dialog.getByLabel('Escribí «borrar» para confirmar').fill('borrar');
-    await dialog.getByRole('button', { name: 'Borrar todo' }).click();
+    // La app se recarga sola después de borrar: esperar esa recarga antes de seguir.
+    await Promise.all([page.waitForEvent('load'), dialog.getByRole('button', { name: 'Borrar todo' }).click()]);
     await page.getByRole('navigation', { name: 'Secciones' }).waitFor({ timeout: 10000 });
     await page.goto(`${BASE}#/ajustes`);
     check('borrar todo: la app vuelve a como vino', await has(page, 'Todavía no hiciste ninguna copia'));
 
     check('etapa 5: sin errores en consola', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+
+  // ——— Etapa 6: progreso, peso y actividades ———
+  {
+    const { context, page, errors } = await openAt('2026-11-06T19:00:00-03:00'); // viernes
+    // Datos de prueba solo para este navegador de prueba (no son datos reales del usuario).
+    const inject = (store, rows) =>
+      page.evaluate(
+        ({ store, rows }) =>
+          new Promise((resolve, reject) => {
+            const req = indexedDB.open('entreno');
+            req.onerror = () => reject(req.error);
+            req.onsuccess = () => {
+              const tx = req.result.transaction(store, 'readwrite');
+              rows.forEach((r) => tx.objectStore(store).put(r));
+              tx.oncomplete = () => {
+                req.result.close();
+                resolve();
+              };
+              tx.onerror = () => reject(tx.error);
+            };
+          }),
+        { store, rows },
+      );
+    const jalon = (date, w, reps) => ({
+      id: `t-${date}`, source: 'registro', date, name: 'Tren superior', routineId: 'tren-superior', status: 'completa',
+      startedAt: `${date}T11:00:00.000Z`, finishedAt: `${date}T11:40:00.000Z`,
+      items: [{ id: 'i1', exerciseId: 'jalon-al-pecho', sets: [{ done: true, weightKg: w, reps }, { done: true, weightKg: w, reps: reps - 1 }] }],
+    });
+    await inject('sessions', [jalon('2026-10-13', 45, 12), jalon('2026-10-20', 50, 10), jalon('2026-10-22', 50, 11), jalon('2026-11-03', 52.5, 10)]);
+    await inject('bodyMetrics', [
+      ['2026-10-05', 84.2], ['2026-10-08', 83.8], ['2026-10-13', 83.6], ['2026-10-20', 83.3], ['2026-10-27', 83.0], ['2026-11-03', 82.6],
+    ].map(([date, w]) => ({ id: `b-${date}`, date, weightKg: w, createdAt: '' })));
+    await reload(page);
+
+    // Viernes: pádel en un toque.
+    check('viernes: botón para registrar pádel', await has(page, 'Registrar pádel'));
+    await page.getByRole('button', { name: 'Registrar pádel' }).click();
+    const sheet = page.getByRole('dialog', { name: 'Registrar actividad' });
+    check('actividad: pádel preseleccionado', (await sheet.getByRole('button', { name: 'Pádel' }).getAttribute('aria-pressed')) === 'true');
+    await sheet.getByLabel('Minutos').fill('90');
+    await sheet.getByRole('button', { name: '7', exact: true }).click();
+    await shot(page, '25-registrar-padel');
+    await sheet.getByRole('button', { name: 'Guardar' }).click();
+    check('actividad: aparece en Hoy y en la semana', await has(page, 'Hoy registraste', '90 min', '1 actividad'));
+
+    // Progreso: constancia, peso y evolución.
+    await page.getByRole('link', { name: 'Progreso' }).click();
+    check('progreso: tarjetas de constancia', await has(page, 'Esta semana', 'Plan (4 semanas)', 'Actividades'));
+    check('progreso: barras de sesiones por semana', (await page.locator('.chart-bar').count()) >= 3);
+    await page.locator('rect[role=button]').last().click();
+    check('progreso: tocar una barra muestra el detalle', await has(page, 'planificadas'));
+    await page.getByLabel('Peso (kg)').fill('82,4');
+    await page.getByRole('button', { name: 'Anotar' }).click();
+    check('peso: promedio semanal y tendencia', await has(page, 'Promedio de la última semana', 'en 4 semanas'));
+    check('peso: leyenda con las dos series', await has(page, 'Registro diario', 'Promedio semanal'));
+    const weightChart = page.locator('.chart').nth(1).locator('rect[tabindex="0"]');
+    // Centrar el gráfico: si queda debajo de la barra de navegación, el toque cae en la barra.
+    await weightChart.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+    const box = await weightChart.boundingBox();
+    await page.mouse.click(box.x + box.width - 4, box.y + box.height / 2);
+    check('peso: tocar el gráfico muestra los valores', await has(page, '82,4 kg'), (await page.locator('.chart-tip').allInnerTexts()).join(' / '));
+    const chosen = await page.getByLabel('Ejercicio', { exact: true }).evaluate((el) => el.selectedOptions[0]?.textContent);
+    check('evolución: elige jalón y muestra primera y última', chosen === 'Jalón al pecho (4)' && (await has(page, 'Primera:', '45 kg × 12', '52,5 kg × 10')), chosen);
+    await page.getByText('Ver como tabla').click();
+    check('tabla: la misma información sin gráfico', await has(page, 'Semana del'));
+    check('progreso: sin scroll horizontal', await noHorizontalScroll(page));
+    await shot(page, '26-progreso');
+    check('sesiones: la actividad figura como tal', (await page.locator('li', { hasText: 'Pádel' }).first().innerText()).includes('Actividad'));
+
+    await page.goto(`${BASE}#/ejercicios/jalon-al-pecho`);
+    check('ejercicio: mini gráfico de evolución', await has(page, 'Mejor serie de cada sesión'));
+
+    check('etapa 6: sin errores en consola', errors.length === 0, errors.join(' | '));
     await context.close();
   }
 

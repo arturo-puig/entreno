@@ -15,6 +15,9 @@ import { orderRoutines } from '../domain/order';
 import { navigate } from '../router';
 import { Icon } from '../ui/Icon';
 import { Badge, Loading, Sheet, Switch, originLabel } from '../ui/common';
+import { ActivitySheet } from '../ui/ActivitySheet';
+import { formatLoggedSet } from '../domain/format';
+import { isActivity } from '../domain/stats';
 import { useNow } from '../ui/useNow';
 
 const LIGHT_ROUTINE_ID = 'cardio-movilidad';
@@ -23,6 +26,7 @@ export function Today() {
   const now = useNow();
   const iso = toISODate(now);
   const [picking, setPicking] = useState(false);
+  const [logging, setLogging] = useState<string | null>(null);
   const pwa = usePwa();
 
   const data = useLiveQuery(async () => {
@@ -62,6 +66,9 @@ export function Today() {
       todays.filter((x) => x.routineId === routine.id).sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''))[0])
     : undefined;
   const otherOpen = todays.find((x) => x.status === 'en-curso' && x.id !== routineSession?.id);
+  const todaysActivities = todays.filter(isActivity);
+  // Actividad sugerida según el día: pádel el viernes, caminata el domingo.
+  const suggestedActivity = plan.type === 'actividad' && /p[aá]del/i.test(plan.label) ? 'padel' : plan.type === 'descanso' ? 'caminata' : undefined;
 
   const choose = async (r: Routine) => {
     await updateDayState(iso, { routineId: r.id === plan.routineId ? undefined : r.id, short: false });
@@ -146,7 +153,24 @@ export function Today() {
             <h2 className="hero-title">{plan.label}</h2>
           </div>
           {plan.detail && <p className="muted">{plan.detail}</p>}
+          {suggestedActivity && (
+            <button className="btn btn-primary btn-xl" onClick={() => setLogging(suggestedActivity)}>
+              {suggestedActivity === 'padel' ? 'Registrar pádel' : 'Registrar caminata'}
+            </button>
+          )}
         </section>
+      )}
+
+      {todaysActivities.length > 0 && (
+        <div className="card logged-today">
+          <p className="section-title">Hoy registraste</p>
+          {todaysActivities.map((a) => (
+            <p key={a.id} className="done-line">
+              <Icon name="check" size={18} /> {a.name}
+              {a.items[0]?.sets[0] && formatLoggedSet(a.items[0].sets[0]) !== '—' && <span className="muted"> · {formatLoggedSet(a.items[0].sets[0])}</span>}
+            </p>
+          ))}
+        </div>
       )}
 
       <div className="stack">
@@ -159,6 +183,9 @@ export function Today() {
             Volver a lo planificado: {plan.label}
           </button>
         )}
+        <button className="btn btn-ghost btn-block" onClick={() => setLogging('padel')}>
+          Registrar actividad (pádel, bici, caminata…)
+        </button>
       </div>
 
       <WeekStrip week={week} />
@@ -183,6 +210,8 @@ export function Today() {
           </div>
         </div>
       )}
+
+      {logging && <ActivitySheet today={now} initial={logging} onClose={() => setLogging(null)} />}
 
       {picking && (
         <Sheet title="¿Qué querés hacer hoy?" onClose={() => setPicking(false)}>
@@ -374,13 +403,14 @@ function RoutineDay(props: {
 
 function WeekStrip({ week }: { week: WeekDay[] }) {
   const planned = week.filter((d) => d.plan.type === 'rutina').length;
-  const done = week.filter((d) => d.done).length;
+  const done = week.filter((d) => d.gym).length;
+  const acts = week.filter((d) => d.activity).length;
   return (
     <section className="section">
       <div className="section-head">
         <h2 className="section-title">Esta semana</h2>
         <span className="muted small">
-          {done} de {planned} sesiones
+          {done} de {planned} sesiones{acts > 0 && ` · ${acts} ${acts === 1 ? 'actividad' : 'actividades'}`}
         </span>
       </div>
       <div className="week">

@@ -7,6 +7,8 @@ import { navigate } from '../router';
 import { Icon } from '../ui/Icon';
 import { Badge, Loading, NotFound, PendingNote, ScreenHeader } from '../ui/common';
 import { ExerciseMedia } from '../ui/ExerciseMedia';
+import { LineChart, SERIES_ACCENT } from '../ui/charts';
+import { exerciseProgress } from '../domain/stats';
 
 export function ExerciseDetail({ id }: { id: string }) {
   const data = useLiveQuery(async () => {
@@ -122,6 +124,21 @@ export function ExerciseDetail({ id }: { id: string }) {
 
       <section className="section">
         <h2 className="section-title">Tu historial</h2>
+        {(() => {
+          const { points } = exerciseProgress(sessions, ex);
+          if (points.length < 2) return null;
+          return (
+            <div className="card chart-card">
+              <p className="chart-title">Mejor serie de cada sesión</p>
+              <LineChart
+                ariaLabel={`${ex.name}: mejor serie de cada sesión`}
+                height={150}
+                formatX={(v) => `${new Date(v).getDate()}/${new Date(v).getMonth() + 1}`}
+                series={[{ name: ex.name, style: 'line', color: SERIES_ACCENT, points: points.map((p) => ({ x: parseISODate(p.date).getTime(), y: p.value, label: p.label })) }]}
+              />
+            </div>
+          );
+        })()}
         {history.length === 0 ? (
           <p className="muted">Todavía no hay registros de este ejercicio.</p>
         ) : (

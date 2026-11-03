@@ -2,6 +2,7 @@ import { db, getWeekPlan, setWeekPlan } from './db';
 import type { DayPlan, Exercise, Prefs, Readiness, Routine, Session, UserMedia } from './types';
 import type { Mode } from '../domain/plan';
 import { createSession, sessionStatus, staleSessions } from '../domain/session';
+import { createActivity } from '../domain/stats';
 import { ROUTINES } from '../data/routines';
 import { duplicateRoutine, emptyRoutine, sessionToRoutine, uid, withNewVersion } from '../domain/edit';
 import { replaceDay, slugify } from '../domain/catalog';
@@ -196,4 +197,33 @@ export async function getPrefs(): Promise<Prefs> {
 
 export async function setPrefs(patch: Partial<Prefs>): Promise<void> {
   await db.meta.put({ key: 'prefs', value: { ...(await getPrefs()), ...patch } });
+}
+
+// ——— Actividades y peso corporal ———
+
+/** Registro: pádel, bici, caminata o trote en un toque. */
+export async function logActivity(params: Parameters<typeof createActivity>[0]): Promise<string> {
+  const s = createActivity(params);
+  await db.sessions.add(s);
+  return s.id;
+}
+
+/** Registro: peso y/o cintura del día. Si ya anotaste ese día, se actualiza (no se duplica). */
+export async function saveBodyMetric(params: { date: string; weightKg?: number; waistCm?: number }): Promise<void> {
+  await db.transaction('rw', db.bodyMetrics, async () => {
+    const existing = await db.bodyMetrics.where('date').equals(params.date).first();
+    if (existing) {
+      await db.bodyMetrics.update(existing.id, {
+        ...(params.weightKg !== undefined ? { weightKg: params.weightKg } : {}),
+        ...(params.waistCm !== undefined ? { waistCm: params.waistCm } : {}),
+      });
+    } else {
+      await db.bodyMetrics.add({ id: `b-${uid()}`, ...params, createdAt: new Date().toISOString() });
+    }
+  });
+}
+
+/** Acto: borra un registro de peso (se confirma en la interfaz). */
+export async function deleteBodyMetric(id: string): Promise<void> {
+  await db.bodyMetrics.delete(id);
 }

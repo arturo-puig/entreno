@@ -3,7 +3,7 @@ import type { DayPlan, Equipment, MovementType, MuscleGroup } from '../db/types'
 export const MUSCLE_GROUPS: MuscleGroup[] = ['Piernas', 'Glúteos', 'Pecho', 'Espalda', 'Hombros', 'Brazos', 'Core', 'Cardio', 'Movilidad'];
 
 export const EQUIPMENT: Equipment[] = [
-  'Máquina', 'Smith', 'Barra', 'Mancuernas', 'Polea', 'Banda elástica', 'Banco', 'Peso corporal', 'Cinta', 'Bicicleta fija',
+  'Máquina', 'Smith', 'Barra', 'Mancuernas', 'Polea', 'Banda elástica', 'Banco', 'Peso corporal', 'Cinta', 'Bicicleta fija', 'Bicicleta', 'Paleta',
 ];
 
 export const MOVEMENTS: MovementType[] = [
