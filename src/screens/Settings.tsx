@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { downloadExport } from '../db/backup';
+import { DEFAULT_PREFS, setPrefs } from '../db/actions';
+import type { Prefs } from '../db/types';
 import { APP_VERSION } from '../version';
 import { Icon } from '../ui/Icon';
-import { ScreenHeader } from '../ui/common';
+import { ScreenHeader, Switch } from '../ui/common';
 
 interface StorageInfo {
   supported: boolean;
@@ -27,6 +29,7 @@ export function Settings() {
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string>();
   const lastExport = useLiveQuery(() => db.meta.get('lastExportAt'));
+  const prefs = useLiveQuery(async () => ({ ...DEFAULT_PREFS, ...((await db.meta.get('prefs'))?.value as Partial<Prefs> | undefined) }));
 
   useEffect(() => {
     readStorage().then(setStorage, () => setStorage({ supported: false }));
@@ -54,6 +57,33 @@ export function Settings() {
   return (
     <>
       <ScreenHeader title="Ajustes" />
+
+      <section className="section">
+        <h2 className="section-title">Durante el entrenamiento</h2>
+        <div className="card stack-sm">
+          {prefs && (
+            <>
+              <Switch
+                checked={prefs.vibrate}
+                onChange={(v) => setPrefs({ vibrate: v })}
+                label="Vibrar al terminar el descanso"
+                description="También al terminar un ejercicio por tiempo."
+              />
+              <Switch checked={prefs.sound} onChange={(v) => setPrefs({ sound: v })} label="Sonido al terminar el descanso" description="Dos pitidos cortos." />
+              <Switch
+                checked={prefs.rpe}
+                onChange={(v) => setPrefs({ rpe: v })}
+                label="Registrar esfuerzo por serie (RPE)"
+                description="Opcional: del 1 al 10, qué tan dura fue cada serie."
+              />
+            </>
+          )}
+          <p className="hint">
+            Mientras entrenás, la pantalla queda encendida para que el temporizador funcione. Si la bloqueás, el aviso
+            puede no llegar: el navegador no deja vibrar con la pantalla apagada.
+          </p>
+        </div>
+      </section>
 
       <section className="section">
         <h2 className="section-title">Copia de seguridad</h2>

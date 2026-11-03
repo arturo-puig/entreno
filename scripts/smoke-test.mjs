@@ -24,7 +24,7 @@ function check(name, ok, detail = '') {
 }
 
 /** Contexto nuevo (almacenamiento vacío) con fecha fija en hora de Argentina. */
-async function openAt(isoDateTime, { width = 360, height = 800 } = {}) {
+async function openAt(isoDateTime, { width = 360, height = 800, flowingClock = false } = {}) {
   const context = await browser.newContext({
     viewport: { width, height },
     deviceScaleFactor: 2,
@@ -38,7 +38,9 @@ async function openAt(isoDateTime, { width = 360, height = 800 } = {}) {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-  await page.clock.setFixedTime(new Date(isoDateTime));
+  // Reloj fijo para las pantallas; reloj controlable (avanza y se puede adelantar) para los temporizadores.
+  if (flowingClock) await page.clock.install({ time: new Date(isoDateTime) });
+  else await page.clock.setFixedTime(new Date(isoDateTime));
   await page.goto(BASE);
   await page.getByRole('navigation', { name: 'Secciones' }).waitFor();
   return { context, page, errors };
@@ -82,7 +84,7 @@ try {
     check('lunes: Rutina A de tu profe', await has(page, 'Rutina A', 'de tu profe'));
     check('lunes: 9 ejercicios, ≈ 75 min', await has(page, '9 ejercicios', '≈ 75 min'));
     check('lunes: press de banca pendiente', (await page.locator('li', { hasText: 'Press de banca' }).getByText('Pendiente').count()) === 1);
-    check('lunes: botón Comenzar visible y deshabilitado (etapa 4)', await page.getByRole('button', { name: 'Comenzar' }).isDisabled());
+    check('lunes: botón Comenzar visible y habilitado', await page.getByRole('button', { name: 'Comenzar' }).isEnabled());
     check('lunes: sin scroll horizontal a 360 px', await noHorizontalScroll(page));
     await shot(page, '01-hoy-lunes');
 
@@ -289,7 +291,8 @@ try {
     // Completar un ejercicio pendiente de la biblioteca.
     await go('#/ejercicios/movilidad-cadera', 'Cómo se hace');
     await page.getByRole('button', { name: 'Editar ejercicio' }).click();
-    await page.getByLabel('Cómo se hace').fill('Paso uno de prueba\nPaso dos de prueba');
+    await page.locator('h1', { hasText: 'Editar ejercicio' }).waitFor();
+    await page.getByLabel('Cómo se hace', { exact: true }).fill('Paso uno de prueba\nPaso dos de prueba');
     await page.getByRole('button', { name: 'Marcar como confirmado' }).click();
     await page.getByRole('button', { name: 'Guardar' }).click();
     check('editar ejercicio: guarda los pasos y quita el pendiente', (await has(page, 'Paso dos de prueba')) && !(await page.getByText('Pendiente de confirmar').count()));
@@ -305,6 +308,110 @@ try {
     check('ejercicio nuevo: se crea y se abre', (await title(page)) === 'Remo con mancuerna', await title(page));
 
     check('etapa 3: sin errores en consola', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+
+  // ——— Etapa 4: entrenamiento activo ———
+  {
+    const { context, page, errors } = await openAt('2026-11-03T08:00:00-03:00', { flowingClock: true });
+    const set = (n) => page.locator('.set').nth(n - 1);
+    const pad = page.getByRole('group', { name: 'Teclado numérico' });
+    const key = (k) => pad.getByRole('button', { name: k, exact: true }).click();
+
+    await page.getByRole('button', { name: 'Comenzar' }).click();
+    check('sesión: arranca en el primer ejercicio', await has(page, 'Ejercicio 1 de 5', 'Jalón al pecho', 'Plan', '3 × 8–12'));
+    check('sesión: sin barra de navegación', (await page.getByRole('navigation', { name: 'Secciones' }).count()) === 0);
+    check('sesión: usa el histórico como referencia', await has(page, 'tu registro histórico'));
+    check('sesión: sugiere 45 kg y muestra el rango del plan', (await set(1).innerText()).includes('45 kg') && (await set(1).innerText()).includes('8–12'));
+    await shot(page, '17-sesion-inicio');
+
+    // Teclado propio: peso → Siguiente → repeticiones.
+    await set(1).getByRole('button', { name: /Peso \(kg\), serie 1/ }).click();
+    for (const k of ['4', '7', ',', '5']) await key(k);
+    check('teclado: escribe 47,5', (await pad.locator('.numpad-value').innerText()) === '47,5');
+    await shot(page, '18-sesion-teclado');
+    await pad.getByRole('button', { name: 'Siguiente' }).click();
+    await key('1');
+    await key('0');
+    await pad.getByRole('button', { name: 'Listo' }).click();
+    await set(1).getByRole('button', { name: /marcar como hecha/ }).click();
+    check('serie 1: guarda lo escrito', (await set(1).innerText()).includes('47,5 kg') && (await set(1).innerText()).includes('10'));
+    await has(page, 'Descanso');
+    const restText = await page.locator('.timer-label strong').innerText();
+    check('descanso: arranca solo con 1:30', /^1:(30|29|28)$/.test(restText), restText);
+    await shot(page, '19-sesion-descanso');
+    await page.clock.fastForward(92_000);
+    check('descanso: termina solo y avisa', await has(page, 'Descanso terminado'));
+
+    // Completar sin escribir: toma la sugerencia visible; pregunta las repeticiones del rango.
+    await set(2).getByRole('button', { name: /marcar como hecha/ }).click();
+    check('serie 2: completa con la carga sugerida (50 kg)', (await set(2).innerText()).includes('50 kg'));
+    check('serie 2: pregunta las repeticiones (rango sin número)', (await pad.locator('.numpad-label').innerText()).includes('Repeticiones · serie 2'));
+    await pad.getByRole('button', { name: 'Listo' }).click();
+    await page.getByRole('button', { name: 'Saltar' }).click();
+    await page.getByRole('button', { name: 'Siguiente' }).waitFor();
+
+    await page.reload();
+    await page.locator('.session-top').waitFor();
+    check(
+      'persistencia: la sesión sigue tras recargar',
+      (await has(page, 'Ejercicio 1 de 5')) && (await set(2).getByRole('button', { name: /hecha \(tocá/ }).count()) === 1,
+    );
+
+    // Siguiente ejercicio: primera vez → «Cómo se hace» abierto con su ilustración.
+    await page.getByRole('button', { name: 'Siguiente' }).click();
+    check('primera vez: muestra cómo se hace con ilustración', (await has(page, 'Press inclinado con mancuernas', 'Primera vez', 'Peso por mancuerna')) && (await page.locator('.media-illustration').count()) === 1);
+    await shot(page, '20-sesion-primera-vez');
+    await page.getByRole('button', { name: 'Sustituir' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: /Press de pecho en máquina/ }).click();
+    check('sustituir: cambia solo en la sesión', await has(page, 'Press de pecho en máquina', 'En lugar de Press inclinado con mancuernas'));
+    await page.getByRole('button', { name: 'Siguiente' }).click();
+    await page.getByRole('button', { name: 'Omitir' }).click();
+    check('omitir: se puede deshacer', await has(page, 'Omitiste este ejercicio'));
+
+    // Ir a un ejercicio desde la lista.
+    await page.getByRole('button', { name: 'Lista de ejercicios' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: /Dead bug/ }).click();
+    check('lista: salta al ejercicio 5 (sin campo de peso)', (await has(page, 'Ejercicio 5 de 5', 'Dead bug')) && (await set(1).getByRole('button', { name: /Peso/ }).count()) === 0);
+    check('sesión: sin scroll horizontal', await noHorizontalScroll(page));
+
+    // Terminar con esfuerzo de la sesión.
+    await page.getByRole('button', { name: 'Terminar' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: '7', exact: true }).click();
+    await shot(page, '21-sesion-terminar');
+    await page.getByRole('dialog').getByRole('button', { name: 'Terminar' }).click();
+    check('terminar: vuelve a Hoy como incompleta (igual suma)', await has(page, 'Igual suma', 'Ver sesión', '1 de 5 sesiones'));
+    await shot(page, '22-hoy-sesion-hecha');
+
+    await page.getByRole('link', { name: 'Progreso' }).click();
+    check('progreso: lista la sesión con su esfuerzo', await has(page, 'Tus sesiones', 'Tren superior', 'Incompleta', 'esfuerzo 7/10'));
+    await page.goto(`${BASE}#/ejercicios/jalon-al-pecho`);
+    check('historial del ejercicio: muestra lo de hoy', await has(page, '47,5 kg × 10'));
+
+    // Preferencia RPE + ejercicio por tiempo (sentadilla isométrica).
+    await page.goto(`${BASE}#/ajustes`);
+    await page.getByRole('switch', { name: /Registrar esfuerzo por serie/ }).check();
+    await page.getByRole('link', { name: 'Hoy' }).click();
+    await page.getByRole('button', { name: 'Hacer otra rutina hoy' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: /Rutina A/ }).click();
+    await page.getByRole('button', { name: 'Comenzar' }).click();
+    await page.getByRole('button', { name: 'Lista de ejercicios' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: /Sentadilla isométrica/ }).click();
+    check('RPE: aparece cuando está activado', await has(page, 'RPE —'));
+    await set(1).getByRole('button', { name: /Iniciar 1 min/ }).click();
+    const workText = await page.locator('.timer-label strong').innerText();
+    check('ejercicio por tiempo: cuenta regresiva de 1:00', /^(1:00|0:59|0:58)$/.test(workText), workText);
+    await page.clock.fastForward(61_000);
+    check('ejercicio por tiempo: marca la serie al terminar', (await set(1).getByRole('button', { name: /hecha \(tocá/ }).count()) === 1);
+    check('ejercicio por tiempo: arranca el descanso', await has(page, 'Descanso'));
+
+    // Al día siguiente, la sesión que quedó abierta se cierra como incompleta (sin deuda).
+    await page.clock.fastForward(24 * 3600 * 1000);
+    await page.goto(`${BASE}#/progreso`);
+    await page.reload();
+    check('sesión olvidada abierta: se cierra sola como incompleta', (await has(page, 'Rutina A')) && !(await page.getByText('En curso').count()));
+
+    check('etapa 4: sin errores en consola', errors.length === 0, errors.join(' | '));
     await context.close();
   }
 

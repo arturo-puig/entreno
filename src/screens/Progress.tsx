@@ -1,9 +1,11 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { formatLoggedSet } from '../domain/format';
+import { summarize } from '../domain/session';
+import { capitalize, dayAndMonth, parseISODate, weekdayName } from '../domain/dates';
 import { navigate } from '../router';
 import { routineFromSession } from '../db/actions';
-import { EmptyState, Loading, ScreenHeader } from '../ui/common';
+import { Badge, EmptyState, Loading, ScreenHeader } from '../ui/common';
 import { Icon } from '../ui/Icon';
 
 export function Progress() {
@@ -13,7 +15,9 @@ export function Progress() {
   });
   if (!data) return <Loading />;
   const nameOf = new Map(data.exercises.map((e) => [e.id, e.name]));
-  const logged = data.sessions.filter((s) => s.source === 'registro');
+  const logged = data.sessions
+    .filter((s) => s.source === 'registro')
+    .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '') || (b.startedAt ?? '').localeCompare(a.startedAt ?? ''));
   const historic = data.sessions.filter((s) => s.source === 'historico');
 
   return (
@@ -23,6 +27,37 @@ export function Progress() {
         <EmptyState icon="progress" title="Todavía no registraste sesiones">
           Cuando completes la primera, vas a ver acá tu constancia semanal y la evolución de tus cargas.
         </EmptyState>
+      )}
+
+      {logged.length > 0 && (
+        <section className="section">
+          <h2 className="section-title">Tus sesiones</h2>
+          <ul className="list">
+            {logged.map((s) => {
+              const sum = summarize(s);
+              const d = parseISODate(s.date!);
+              return (
+                <li key={s.id}>
+                  <button className="row" onClick={() => navigate(`/sesion/${s.id}`)}>
+                    <span className="row-main">
+                      <span className="row-title">{s.name}</span>
+                      <span className="row-sub">
+                        {capitalize(weekdayName(d))} {dayAndMonth(d)} · {sum.setsDone} series
+                        {sum.minutes !== undefined && s.status !== 'en-curso' && ` · ${sum.minutes} min`}
+                        {s.sessionRpe !== undefined && ` · esfuerzo ${s.sessionRpe}/10`}
+                      </span>
+                    </span>
+                    <Badge tone={s.status === 'completa' ? 'accent' : 'neutral'}>
+                      {s.status === 'en-curso' ? 'En curso' : s.status === 'completa' ? 'Completa' : 'Incompleta'}
+                    </Badge>
+                    <Icon name="chevron" className="row-chevron" size={18} />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="hint">Los gráficos de constancia y evolución de cargas llegan en la etapa 6.</p>
+        </section>
       )}
 
       {historic.length > 0 && (

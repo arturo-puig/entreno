@@ -1,5 +1,7 @@
 import { db, getWeekPlan, setWeekPlan } from './db';
-import type { DayPlan, Exercise, Routine, UserMedia } from './types';
+import type { DayPlan, Exercise, Prefs, Readiness, Routine, Session, UserMedia } from './types';
+import type { Mode } from '../domain/plan';
+import { createSession, sessionStatus, staleSessions } from '../domain/session';
 import { ROUTINES } from '../data/routines';
 import { duplicateRoutine, emptyRoutine, sessionToRoutine, uid, withNewVersion } from '../domain/edit';
 import { replaceDay, slugify } from '../domain/catalog';
@@ -137,4 +139,61 @@ export async function addUserMedia(params: { exerciseId: string; variant?: strin
 /** Acto: borra un video o foto propio. */
 export async function deleteUserMedia(id: string): Promise<void> {
   await db.userMedia.delete(id);
+}
+
+// ——— Sesiones de entrenamiento ———
+
+/** Registro: empieza la sesión del día y devuelve su id. */
+export async function startSession(params: { routine: Routine; mode: Mode; readiness?: Readiness; date: string }): Promise<string> {
+  const s = createSession({ ...params, now: new Date() });
+  await db.sessions.add(s);
+  return s.id;
+}
+
+/** Registro: aplica un cambio a la sesión y lo guarda en el momento (si se cierra el navegador, no se pierde). */
+export async function updateSession(id: string, change: (s: Session) => void): Promise<void> {
+  await db.transaction('rw', db.sessions, async () => {
+    const s = await db.sessions.get(id);
+    if (!s) return;
+    change(s);
+    await db.sessions.put(s);
+  });
+}
+
+/** Cierra la sesión: completa o incompleta según lo registrado. */
+export async function finishSession(id: string, extra: { sessionRpe?: number; note?: string }): Promise<void> {
+  await updateSession(id, (s) => {
+    s.status = sessionStatus(s);
+    s.finishedAt = new Date().toISOString();
+    s.restEndsAt = undefined;
+    s.sessionRpe = extra.sessionRpe;
+    s.note = extra.note?.trim() || undefined;
+  });
+}
+
+/** Acto: descarta una sesión (se confirma en la interfaz). */
+export async function discardSession(id: string): Promise<void> {
+  await db.sessions.delete(id);
+}
+
+/** Al abrir la app: cierra o descarta sesiones que quedaron abiertas de otro día. */
+export async function closeStaleSessions(today: string): Promise<void> {
+  const { close, discard } = staleSessions(await db.sessions.where('source').equals('registro').toArray(), today);
+  if (!close.length && !discard.length) return;
+  await db.transaction('rw', db.sessions, async () => {
+    for (const s of discard) await db.sessions.delete(s.id);
+    for (const s of close) await db.sessions.put({ ...s, status: 'incompleta', restEndsAt: undefined, finishedAt: s.finishedAt ?? s.startedAt });
+  });
+}
+
+// ——— Preferencias ———
+
+export const DEFAULT_PREFS: Prefs = { vibrate: true, sound: false, rpe: false };
+
+export async function getPrefs(): Promise<Prefs> {
+  return { ...DEFAULT_PREFS, ...((await db.meta.get('prefs'))?.value as Partial<Prefs> | undefined) };
+}
+
+export async function setPrefs(patch: Partial<Prefs>): Promise<void> {
+  await db.meta.put({ key: 'prefs', value: { ...(await getPrefs()), ...patch } });
 }

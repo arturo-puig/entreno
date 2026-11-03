@@ -10,8 +10,9 @@ import { Progress } from './screens/Progress';
 import { Settings } from './screens/Settings';
 import { RoutineEditor } from './screens/RoutineEditor';
 import { ExerciseEditor } from './screens/ExerciseEditor';
+import { SessionScreen } from './screens/Session';
 
-const TABS = ['hoy', 'rutinas', 'ejercicios', 'progreso', 'ajustes'];
+const TABS = ['hoy', 'rutinas', 'ejercicios', 'progreso', 'ajustes', 'sesion'];
 
 export function App() {
   const route = useRoute();
@@ -21,6 +22,7 @@ export function App() {
   const key = route.join('/');
   // Los editores ocupan toda la pantalla: sin barra de navegación para no perder cambios por un toque.
   const isEditor = action === 'editar' || (tab === 'ejercicios' && detail === 'nuevo');
+  const isSession = tab === 'sesion' && !!detail;
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -28,10 +30,10 @@ export function App() {
 
   return (
     <div className="app">
-      <main className={`screen${isEditor ? ' is-editor' : ''}`}>
-        <ErrorBoundary key={key}>{renderScreen(tab, detail, action)}</ErrorBoundary>
+      <main className={`screen${isEditor ? ' is-editor' : ''}${isSession ? ' is-session' : ''}`}>
+        <ErrorBoundary key={isSession ? 'sesion' : key}>{renderScreen(tab, detail, action)}</ErrorBoundary>
       </main>
-      {!isEditor && <BottomNav active={tab} />}
+      {!isEditor && !isSession && <BottomNav active={tab} />}
     </div>
   );
 }
@@ -49,6 +51,8 @@ function renderScreen(tab: string, detail?: string, action?: string) {
       return <Progress />;
     case 'ajustes':
       return <Settings />;
+    case 'sesion':
+      return detail ? <SessionScreen id={detail} /> : <Today />;
     default:
       return <Today />;
   }

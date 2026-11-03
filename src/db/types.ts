@@ -146,7 +146,9 @@ export interface LoggedSet {
   distanceKm?: number;
   done: boolean;
   rpe?: number;
+  /** Objetivo de esta serie al momento de entrenar (copia del plan). */
   planned?: PlannedSet;
+  completedAt?: string;
 }
 
 export interface SessionItem {
@@ -154,6 +156,9 @@ export interface SessionItem {
   exerciseId: string;
   routineItemId?: string;
   variant?: string;
+  /** Copia del plan del ejercicio al empezar: si después editás la rutina, el registro no cambia. */
+  plan?: RoutineItem;
+  optional?: boolean;
   substitutedFrom?: string;
   skipped?: boolean;
   sets: LoggedSet[];
@@ -177,6 +182,16 @@ export interface Session {
   sessionRpe?: number;
   note?: string;
   items: SessionItem[];
+  /** Ejercicio que estabas mirando (para retomar donde dejaste). */
+  currentIndex?: number;
+  /** Fin del descanso en curso (hora absoluta: no se desfasa si la pantalla se apaga). */
+  restEndsAt?: string;
+}
+
+export interface Prefs {
+  vibrate: boolean;
+  sound: boolean;
+  rpe: boolean;
 }
 
 export interface MetaEntry {

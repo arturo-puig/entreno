@@ -34,7 +34,8 @@ Despliegue: `.github/workflows/deploy.yml` publica en GitHub Pages en cada push 
 - `src/db/types.ts` — modelo de datos. `src/db/db.ts` — Dexie + `ensureSeed` (agrega lo que falta sin pisar ediciones; subir `SEED_REVISION` al sumar datos iniciales nuevos). `src/db/backup.ts` — exportar JSON.
 - `src/data/` — carga inicial: `exercises.ts`, `routines.ts` (rutinas + `WEEK_PLAN`), `history.ts`.
 - `src/domain/` — lógica pura y testeada: fechas, plan semanal y sugerencias, versión corta, estimación de duración, formato, búsqueda, recomendaciones según el estado previo.
-- `src/screens/` — Hoy, Rutinas, RoutineDetail, Ejercicios, ExerciseDetail, Progreso, Ajustes.
+- `src/screens/` — Hoy, Rutinas, RoutineDetail, RoutineEditor, Ejercicios, ExerciseDetail, ExerciseEditor, Session (entrenamiento activo), Progreso, Ajustes.
+- `src/db/actions.ts` — todas las escrituras (fichas de tareas para el futuro asistente). `src/ui/device.ts` — Wake Lock, vibración, sonido.
 - `src/ui/` — componentes compartidos e íconos SVG propios.
 
 ## Estado por etapas
@@ -42,8 +43,8 @@ Despliegue: `.github/workflows/deploy.yml` publica en GitHub Pages en cada push 
 1. ✅ Análisis y arquitectura.
 2. ✅ Estructura visual, navegación de 5 secciones, base de datos local, carga inicial, pantalla Hoy (estado previo, versión corta, elegir otra rutina, sugerencia sin deuda, semana), Rutinas y biblioteca de solo lectura, exportar JSON.
 3. ✅ Edición: rutinas (series y tipo de objetivo, descansos, notación, pendientes → confirmado, reordenar, agregar/quitar, versión corta, versión y «volver a la original»), duplicar/crear/eliminar rutinas, semana editable, histórico → rutina alternativa, editor y alta de ejercicios. Medios adelantados: 18 ilustraciones Everkinetic (CC BY-SA 4.0) animadas alternando las dos posiciones, videos/fotos propios por ejercicio y variante (tabla `userMedia`, Dexie v2), búsqueda en YouTube como complemento externo rotulado.
-4. ⏳ Entrenamiento activo: registro de series (teclado numérico propio), temporizador de descanso por hora de fin + vibración + pantalla encendida (Wake Lock), anterior/siguiente, omitir/sustituir, sesiones incompletas, sRPE opcional, sugerencia de progresión prudente.
-5. ⏳ Medios propios/licenciados por ejercicio y variante, PWA instalable + offline (vite-plugin-pwa), importar copia, borrar datos con confirmación.
+4. ✅ Entrenamiento activo (`src/screens/Session.tsx`, lógica en `src/domain/session.ts`): sesión creada desde Hoy (copia el plan), teclado numérico propio (nunca el del celular), valores sugeridos en gris = carga de la vez anterior + objetivo del plan («lo que ves es lo que se registra» al tocar ✓; si el plan es un rango y no hay número, pregunta), descanso automático por hora de fin con vibración/sonido y pantalla encendida (Wake Lock), cuenta regresiva para ejercicios por tiempo, anterior/siguiente/lista, omitir y sustituir (solo en la sesión), series extra, RPE por serie opcional (Ajustes), esfuerzo de la sesión opcional, sesiones incompletas que igual suman, cierre automático de sesiones olvidadas de otro día, sugerencia de progresión solo con rangos y sesiones reales. Progreso lista las sesiones.
+5. ⏳ PWA instalable + offline (vite-plugin-pwa), importar copia, borrar datos con confirmación. (Los medios ya se hicieron en la etapa 3.)
 6. ⏳ Progreso (constancia semanal, cargas por ejercicio, peso y cintura con promedio semanal), pulido.
 7. ⏳ Asistente v0 (aprobado, después de la etapa 4): capa sobre la app, no reemplazo; las series se registran a toques. Barra «Pedile algo…» en Hoy, ~12 intenciones, comprensión con reglas locales (sin modelos pagos), fichas de tareas con efecto declarado (consulta / registro con eco / acto con confirmación), «Continuar con:», registro local de pedidos con útil/no útil y sinónimos enseñados por el usuario. Medición con un banco de 40–50 frases escrito por el usuario antes de programar. Las acciones de `src/db/actions.ts` son la base de esas fichas.
 Después: copia en Google Drive (v1.1), comidas (v2), Strava / Health Connect (v3).

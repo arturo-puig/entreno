@@ -188,12 +188,15 @@ export function ConfirmSheet(props: {
 }
 
 export function Field({ label, help, children }: { label: string; help?: ReactNode; children: ReactNode }) {
+  // La ayuda queda fuera de la etiqueta: el nombre del campo es solo «label».
   return (
-    <label className="field">
-      <span className="field-label">{label}</span>
-      {children}
+    <div className="field">
+      <label className="field-inner">
+        <span className="field-label">{label}</span>
+        {children}
+      </label>
       {help && <span className="field-help">{help}</span>}
-    </label>
+    </div>
   );
 }
 

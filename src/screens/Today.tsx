@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, getWeekPlan, updateDayState } from '../db/db';
+import { startSession } from '../db/actions';
 import type { Readiness, Routine, Session } from '../db/types';
 import { addDays, capitalize, dayAndMonth, startOfWeek, toISODate, weekdayLetter, weekdayName, parseISODate } from '../domain/dates';
 import { estimateRoutineMinutes } from '../domain/estimate';
@@ -42,6 +43,13 @@ export function Today() {
   const suggestion = missedProfessorRoutine({ weekPlan, routines, sessions, today: now, day });
   const week = weekOverview(weekPlan, sessions, now);
   const exerciseName = new Map(exercises.map((e) => [e.id, e.name]));
+  const todays = sessions.filter((x) => x.source === 'registro' && x.date === iso);
+  // La sesión de hoy de esta rutina: la que está en curso o, si no, la última.
+  const routineSession = routine
+    ? (todays.find((x) => x.routineId === routine.id && x.status === 'en-curso') ??
+      todays.filter((x) => x.routineId === routine.id).sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''))[0])
+    : undefined;
+  const otherOpen = todays.find((x) => x.status === 'en-curso' && x.id !== routineSession?.id);
 
   const choose = async (r: Routine) => {
     await updateDayState(iso, { routineId: r.id === plan.routineId ? undefined : r.id, short: false });
@@ -56,7 +64,23 @@ export function Today() {
         <p className="today-date">{dayAndMonth(now)}</p>
       </header>
 
-      {suggestion && (
+      {otherOpen && (
+        <div className="notice notice-accent">
+          <Icon name="today" size={20} />
+          <div>
+            <p>
+              Tenés una sesión en curso: <strong>{otherOpen.name}</strong>.
+            </p>
+            <div className="notice-actions">
+              <button className="btn btn-sm btn-primary" onClick={() => navigate(`/sesion/${otherOpen.id}`)}>
+                Continuar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {suggestion && !routineSession && (
         <div className="notice notice-accent">
           <Icon name="swap" size={20} />
           <div>
@@ -85,7 +109,7 @@ export function Today() {
           short={!!day?.short}
           readiness={day?.readiness}
           hasLightOption={routines.some((r) => r.id === LIGHT_ROUTINE_ID) && routine.id !== LIGHT_ROUTINE_ID}
-          doneExercises={countDoneExercises(sessions, iso, routine.id)}
+          session={routineSession}
           exerciseName={exerciseName}
         />
       ) : (
@@ -137,11 +161,6 @@ export function Today() {
   );
 }
 
-function countDoneExercises(sessions: Session[], iso: string, routineId: string) {
-  const s = sessions.find((x) => x.source === 'registro' && x.date === iso && x.routineId === routineId);
-  return s ? s.items.filter((i) => i.sets.some((set) => set.done)).length : 0;
-}
-
 function RoutineDay(props: {
   iso: string;
   routine: Routine;
@@ -150,17 +169,28 @@ function RoutineDay(props: {
   short: boolean;
   readiness?: Readiness;
   hasLightOption: boolean;
-  doneExercises: number;
+  session?: Session;
   exerciseName: Map<string, string>;
 }) {
-  const { iso, routine, when, isOverride, readiness, hasLightOption, doneExercises, exerciseName } = props;
+  const { iso, routine, when, isOverride, readiness, hasLightOption, session, exerciseName } = props;
+  const [starting, setStarting] = useState(false);
   const canShorten = hasShortVersion(routine);
-  const mode: Mode = props.short && canShorten ? 'corta' : 'completa';
+  const mode: Mode = session?.mode === 'corta' || (!session && props.short && canShorten) ? 'corta' : 'completa';
   const items = itemsForMode(routine, mode);
+  const total = session ? session.items.length : items.length;
+  const doneExercises = session ? session.items.filter((i) => i.sets.some((x) => x.done)).length : 0;
+  const open = session?.status === 'en-curso';
+  const finished = session && !open;
   const optionalCount = items.filter((i) => i.optional).length;
   const minutes = estimateRoutineMinutes(routine, mode);
   const advice = readiness ? readinessAdvice(readiness) : undefined;
-  const pct = items.length ? Math.round((Math.min(doneExercises, items.length) / items.length) * 100) : 0;
+  const pct = total ? Math.round((Math.min(doneExercises, total) / total) * 100) : 0;
+
+  const start = async () => {
+    setStarting(true);
+    const id = await startSession({ routine, mode, readiness, date: iso });
+    navigate(`/sesion/${id}`);
+  };
 
   return (
     <>
@@ -179,30 +209,48 @@ function RoutineDay(props: {
             {optionalCount > 0 && ` (${optionalCount} opcional)`}
           </span>
         </div>
-        <div className="progress" aria-label={`Progreso: ${doneExercises} de ${items.length} ejercicios`}>
+        <div className="progress" aria-label={`Progreso: ${doneExercises} de ${total} ejercicios`}>
           <div className="progress-bar">
             <span style={{ width: `${pct}%` }} />
           </div>
-          <span className="progress-label">{doneExercises === 0 ? 'Sin empezar' : `${doneExercises} de ${items.length}`}</span>
+          <span className="progress-label">
+            {finished ? (session.status === 'completa' ? 'Completa' : 'Incompleta') : doneExercises === 0 ? (open ? 'En curso' : 'Sin empezar') : `${doneExercises} de ${total}`}
+          </span>
         </div>
-        <button className="btn btn-primary btn-xl" disabled aria-describedby="start-hint">
-          Comenzar
-        </button>
-        <p id="start-hint" className="hint">
-          El registro de series se habilita en la etapa 4.
-        </p>
-        <div className="divider" />
-        <Switch
-          checked={mode === 'corta'}
-          disabled={!canShorten}
-          onChange={(v) => updateDayState(iso, { short: v })}
-          label="Tengo poco tiempo"
-          description={
-            canShorten
-              ? `Versión de ≈ ${estimateRoutineMinutes(routine, 'corta')} min. No cambia la rutina original.`
-              : 'Esta rutina no tiene versión corta.'
-          }
-        />
+        {open ? (
+          <button className="btn btn-primary btn-xl" onClick={() => navigate(`/sesion/${session.id}`)}>
+            Continuar
+          </button>
+        ) : finished ? (
+          <>
+            <p className="done-line">
+              <Icon name="check" size={20} /> {session.status === 'completa' ? '¡Sesión hecha!' : 'Sesión registrada (incompleta). Igual suma.'}
+            </p>
+            <button className="btn btn-block" onClick={() => navigate(`/sesion/${session.id}`)}>
+              Ver sesión
+            </button>
+          </>
+        ) : (
+          <button className="btn btn-primary btn-xl" onClick={start} disabled={starting}>
+            Comenzar
+          </button>
+        )}
+        {!session && (
+          <>
+            <div className="divider" />
+            <Switch
+              checked={mode === 'corta'}
+              disabled={!canShorten}
+              onChange={(v) => updateDayState(iso, { short: v })}
+              label="Tengo poco tiempo"
+              description={
+                canShorten
+                  ? `Versión de ≈ ${estimateRoutineMinutes(routine, 'corta')} min. No cambia la rutina original.`
+                  : 'Esta rutina no tiene versión corta.'
+              }
+            />
+          </>
+        )}
       </section>
 
       <section className="section">

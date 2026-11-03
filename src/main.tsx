@@ -2,11 +2,14 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { ensureSeed } from './db/db';
+import { closeStaleSessions } from './db/actions';
+import { toISODate } from './domain/dates';
 import './styles/app.css';
 
 const root = createRoot(document.getElementById('root')!);
 
 ensureSeed()
+  .then(() => closeStaleSessions(toISODate(new Date())))
   .then(() => {
     root.render(
       <StrictMode>
