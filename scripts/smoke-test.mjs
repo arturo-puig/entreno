@@ -642,6 +642,11 @@ try {
     check('miércoles: descartar sugerencia', await lacks(page, 'todavía no hiciste la'));
     await page.getByRole('button', { name: 'Muy fatigado' }).click();
     check('muy fatigado: recomendación prudente y opción corta', await has(page, 'consultá con un profesional', 'Usar versión corta'));
+    await page.getByRole('button', { name: 'Comenzar' }).click();
+    await page.locator('.session-top').waitFor();
+    check('cardio: «Cómo se hace» cerrado y con cuenta regresiva', (await page.locator('.how').count()) === 0 && (await page.getByRole('button', { name: /Iniciar 30 min/ }).count()) === 1);
+    await page.getByRole('button', { name: 'Volver' }).or(page.getByRole('button', { name: /Salir/ })).first().click();
+    await page.getByRole('navigation', { name: 'Secciones' }).waitFor();
     await context.close();
   }
   {

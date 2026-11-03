@@ -127,7 +127,8 @@ export function SessionScreen({ id }: { id: string }) {
   const sum = summarize(session, new Date(now));
   const isLast = index === session.items.length - 1;
   const firstTime = !previous;
-  const showHow = howOpen[item.id] ?? firstTime;
+  // Se abre solo la primera vez que hacés un ejercicio de fuerza o movilidad (en cardio no hace falta).
+  const showHow = howOpen[item.id] ?? (firstTime && exercise?.movement !== 'Cardio');
 
   const goTo = (i: number) => {
     setPad(null);
@@ -558,7 +559,7 @@ function SetsTable(props: {
                   </button>
                 );
               })}
-              {fields[0] === 'durationSec' && !set.done && planned?.durationSec && (
+              {(fields[0] === 'durationSec' || fields[0] === 'durationMin') && !set.done && planned?.durationSec && (
                 <button className="set-timer" onClick={() => props.onTimer(i, planned.durationSec!)} aria-label={`Iniciar ${formatDuration(planned.durationSec)}`}>
                   ▶
                 </button>
