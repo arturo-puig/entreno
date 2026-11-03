@@ -41,11 +41,14 @@ Despliegue: `.github/workflows/deploy.yml` publica en GitHub Pages en cada push 
 
 1. ✅ Análisis y arquitectura.
 2. ✅ Estructura visual, navegación de 5 secciones, base de datos local, carga inicial, pantalla Hoy (estado previo, versión corta, elegir otra rutina, sugerencia sin deuda, semana), Rutinas y biblioteca de solo lectura, exportar JSON.
-3. 🔧 En curso (rama `etapa-3`): edición de rutinas (series, descansos, confirmar pendientes, reordenar), convertir el registro histórico en rutina alternativa y medios por ejercicio. Hecho: 18 ilustraciones de Everkinetic (CC BY-SA 4.0, `src/data/media.ts`, `public/media/everkinetic/`), tabla `userMedia` (Dexie v2) para videos/fotos propios, lógica de edición en `src/domain/edit.ts` con pruebas. Falta: pantallas (galería de medios, carga de video/foto, editor de rutina y de ejercicio, editor de la semana).
+3. ✅ Edición: rutinas (series y tipo de objetivo, descansos, notación, pendientes → confirmado, reordenar, agregar/quitar, versión corta, versión y «volver a la original»), duplicar/crear/eliminar rutinas, semana editable, histórico → rutina alternativa, editor y alta de ejercicios. Medios adelantados: 18 ilustraciones Everkinetic (CC BY-SA 4.0) animadas alternando las dos posiciones, videos/fotos propios por ejercicio y variante (tabla `userMedia`, Dexie v2), búsqueda en YouTube como complemento externo rotulado.
 4. ⏳ Entrenamiento activo: registro de series (teclado numérico propio), temporizador de descanso por hora de fin + vibración + pantalla encendida (Wake Lock), anterior/siguiente, omitir/sustituir, sesiones incompletas, sRPE opcional, sugerencia de progresión prudente.
 5. ⏳ Medios propios/licenciados por ejercicio y variante, PWA instalable + offline (vite-plugin-pwa), importar copia, borrar datos con confirmación.
 6. ⏳ Progreso (constancia semanal, cargas por ejercicio, peso y cintura con promedio semanal), pulido.
+7. ⏳ Asistente v0 (aprobado, después de la etapa 4): capa sobre la app, no reemplazo; las series se registran a toques. Barra «Pedile algo…» en Hoy, ~12 intenciones, comprensión con reglas locales (sin modelos pagos), fichas de tareas con efecto declarado (consulta / registro con eco / acto con confirmación), «Continuar con:», registro local de pedidos con útil/no útil y sinónimos enseñados por el usuario. Medición con un banco de 40–50 frases escrito por el usuario antes de programar. Las acciones de `src/db/actions.ts` son la base de esas fichas.
 Después: copia en Google Drive (v1.1), comidas (v2), Strava / Health Connect (v3).
+
+**Condición del usuario: TODO GRATUITO.** Nada de servicios pagos, APIs con costo ni consumo de tokens. Hosting en GitHub Pages.
 
 ## Preguntas abiertas (también visibles en la app, sección Rutinas)
 
@@ -55,7 +58,6 @@ Después: copia en Google Drive (v1.1), comidas (v2), Strava / Health Connect (v
 - Pallof press del sábado: ¿cuántas repeticiones?
 - Movilidad de cadera: ¿qué ejercicio?
 - Histórico: «Sentadilla en máquina guiada», ¿es la Smith? «Elevación de talones en máquina», ¿de pie o sentado?
-- Asistente conversacional (idea del usuario, inspirada en «Controlito»): propuesto como capa sobre la app, con fichas de tareas deterministas, reglas locales gratis para entender, eco y confirmación antes de actuar. Pendiente de decisión: alcance, motor de comprensión y orden respecto de las etapas 3–4.
 
 ## Respuestas ya confirmadas por el usuario
 

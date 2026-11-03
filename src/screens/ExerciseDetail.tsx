@@ -6,6 +6,7 @@ import { formatLoggedSet, summarizeSets } from '../domain/format';
 import { navigate } from '../router';
 import { Icon } from '../ui/Icon';
 import { Badge, Loading, NotFound, PendingNote, ScreenHeader } from '../ui/common';
+import { ExerciseMedia } from '../ui/ExerciseMedia';
 
 export function ExerciseDetail({ id }: { id: string }) {
   const data = useLiveQuery(async () => {
@@ -31,21 +32,20 @@ export function ExerciseDetail({ id }: { id: string }) {
     <>
       <ScreenHeader title={ex.name} back="/ejercicios" />
       {otherNames && <p className="muted alt-names">{otherNames}</p>}
-
-      <div className="media media-empty" role="img" aria-label="Sin video ni imagen verificados">
-        <Icon name="image" size={30} />
-        <p className="media-title">Sin video ni imagen verificados</p>
-        <p className="media-text">Más adelante vas a poder agregar un video o una foto propios, por ejemplo de la máquina de tu gimnasio.</p>
+      <div className="header-actions">
+        <button className="btn btn-sm" onClick={() => navigate(`/ejercicios/${ex.id}/editar`)}>
+          <Icon name="edit" size={18} /> Editar ejercicio
+        </button>
       </div>
 
+      <ExerciseMedia exercise={ex} />
+
       <div className="chips">
-        <span className="chip">{ex.group}</span>
-        {ex.equipment.map((e) => (
-          <span className="chip" key={e}>
-            {e}
+        {[...new Set<string>([ex.group, ...ex.equipment, ex.movement])].map((c) => (
+          <span className="chip" key={c}>
+            {c}
           </span>
         ))}
-        <span className="chip">{ex.movement}</span>
       </div>
 
       {ex.pending && <PendingNote>{ex.pending}</PendingNote>}

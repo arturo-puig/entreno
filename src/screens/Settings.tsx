@@ -66,6 +66,7 @@ export function Settings() {
           <p className="hint">
             {last ? `Última copia: ${new Date(last).toLocaleString('es-AR')}` : 'Todavía no hiciste ninguna copia.'}
           </p>
+          <p className="hint">Los videos y fotos que agregás a los ejercicios no entran en esta copia (pesan mucho): quedan solo en el celular.</p>
           <p className="hint">Importar una copia y borrar datos se agregan en la etapa 5.</p>
         </div>
       </section>

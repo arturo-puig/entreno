@@ -63,3 +63,26 @@ describe('edición de rutinas', () => {
     expect(r.items.find((i) => i.exerciseId === 'plancha-frontal')!.notation).toBe('3 × 1 min');
   });
 });
+
+describe('catálogo', async () => {
+  const { replaceDay, slugify, splitList } = await import('./catalog');
+  const { WEEK_PLAN } = await import('../data/routines');
+
+  it('genera ids legibles', () => {
+    expect(slugify('Movilidad de cadera')).toBe('movilidad-de-cadera');
+    expect(slugify('Bíceps a 45°')).toBe('biceps-a-45');
+  });
+
+  it('separa listas por coma o renglón', () => {
+    expect(splitList('Cuádriceps, glúteos ,\n', 'coma')).toEqual(['Cuádriceps', 'glúteos']);
+    expect(splitList('Paso 1, con coma\n\nPaso 2', 'renglon')).toEqual(['Paso 1, con coma', 'Paso 2']);
+  });
+
+  it('cambia un día de la semana y mantiene el orden de lunes a domingo', () => {
+    const next = replaceDay(WEEK_PLAN, { weekday: 0, type: 'rutina', routineId: 'cardio-movilidad', label: 'Cardio y movilidad' });
+    expect(next).toHaveLength(7);
+    expect(next.map((d) => d.weekday)).toEqual([1, 2, 3, 4, 5, 6, 0]);
+    expect(next.find((d) => d.weekday === 0)?.routineId).toBe('cardio-movilidad');
+    expect(next.find((d) => d.weekday === 1)?.routineId).toBe('rutina-a');
+  });
+});

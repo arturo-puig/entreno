@@ -103,7 +103,18 @@ export function Switch({
   );
 }
 
-export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+export function Sheet({
+  title,
+  onClose,
+  children,
+  footer,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+  /** Botones fijos abajo (quedan visibles aunque se abra el teclado). */
+  footer?: ReactNode;
+}) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
@@ -117,15 +128,18 @@ export function Sheet({ title, onClose, children }: { title: string; onClose: ()
   return (
     <div className="sheet-layer">
       <div className="sheet-backdrop" onClick={onClose} />
-      <div className="sheet" role="dialog" aria-modal="true" aria-label={title}>
-        <div className="sheet-handle" />
-        <div className="sheet-head">
-          <h2>{title}</h2>
-          <button className="icon-btn" onClick={onClose} aria-label="Cerrar">
-            <Icon name="close" />
-          </button>
+      <div className={`sheet${footer ? ' has-footer' : ''}`} role="dialog" aria-modal="true" aria-label={title}>
+        <div className="sheet-body">
+          <div className="sheet-handle" />
+          <div className="sheet-head">
+            <h2>{title}</h2>
+            <button className="icon-btn" onClick={onClose} aria-label="Cerrar">
+              <Icon name="close" />
+            </button>
+          </div>
+          {children}
         </div>
-        {children}
+        {footer && <div className="sheet-footer">{footer}</div>}
       </div>
     </div>
   );
@@ -135,4 +149,79 @@ export function originLabel(r: Routine): string {
   if (r.origin === 'profesor') return 'De tu profe';
   if (r.origin === 'complementaria') return 'Complementaria';
   return 'Personal';
+}
+
+/** Confirmación antes de borrar o cambiar algo importante. */
+export function ConfirmSheet(props: {
+  title: string;
+  message: ReactNode;
+  confirmLabel: string;
+  danger?: boolean;
+  onConfirm: () => void | Promise<void>;
+  onCancel: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <Sheet title={props.title} onClose={props.onCancel}>
+      <div className="muted">{props.message}</div>
+      <div className="sheet-actions">
+        <button className="btn" onClick={props.onCancel} disabled={busy}>
+          Cancelar
+        </button>
+        <button
+          className={`btn ${props.danger ? 'btn-danger' : 'btn-primary'}`}
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              await props.onConfirm();
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {props.confirmLabel}
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
+export function Field({ label, help, children }: { label: string; help?: ReactNode; children: ReactNode }) {
+  return (
+    <label className="field">
+      <span className="field-label">{label}</span>
+      {children}
+      {help && <span className="field-help">{help}</span>}
+    </label>
+  );
+}
+
+export function Stepper(props: {
+  value: number;
+  onChange: (v: number) => void;
+  step: number;
+  min?: number;
+  max?: number;
+  format?: (v: number) => string;
+  label: string;
+}) {
+  const { value, step, min = 0, max = Infinity } = props;
+  return (
+    <div className="stepper" role="group" aria-label={props.label}>
+      <button type="button" aria-label={`Menos ${props.label}`} onClick={() => props.onChange(Math.max(min, value - step))} disabled={value <= min}>
+        −
+      </button>
+      <span className="stepper-value">{props.format ? props.format(value) : value}</span>
+      <button type="button" aria-label={`Más ${props.label}`} onClick={() => props.onChange(Math.min(max, value + step))} disabled={value >= max}>
+        +
+      </button>
+    </div>
+  );
+}
+
+/** Texto → número opcional (acepta coma decimal). Vacío o inválido → undefined. */
+export function parseNumber(text: string): number | undefined {
+  const n = Number(text.replace(',', '.').trim());
+  return text.trim() === '' || Number.isNaN(n) ? undefined : n;
 }

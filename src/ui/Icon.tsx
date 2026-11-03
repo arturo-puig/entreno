@@ -62,6 +62,24 @@ const PATHS = {
   download: <path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19.5h14" />,
   check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
   close: <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" />,
+  up: <path d="M12 19V5.5M6.5 11L12 5.5l5.5 5.5" />,
+  down: <path d="M12 5v13.5M6.5 13l5.5 5.5 5.5-5.5" />,
+  edit: <path d="M4.5 19.5l1-4.5L15.5 5a2.1 2.1 0 0 1 3 3l-10 10-4 1.5zM13.5 7l3 3" />,
+  trash: <path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5M10 11v5M14 11v5" />,
+  plus: <path d="M12 5v14M5 12h14" />,
+  external: <path d="M13.5 4.5h6v6M19.5 4.5L11 13M17 14v5.5H4.5V7H10" />,
+  camera: (
+    <>
+      <path d="M4 8.5h3l1.5-2.5h7L17 8.5h3v10.5H4z" />
+      <circle cx="12" cy="13.5" r="3.5" />
+    </>
+  ),
+  copy: (
+    <>
+      <rect x="8.5" y="8.5" width="11" height="11" rx="2" />
+      <path d="M15.5 8.5V5.5a1 1 0 0 0-1-1h-9a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h3" />
+    </>
+  ),
 } as const;
 
 export type IconName = keyof typeof PATHS;

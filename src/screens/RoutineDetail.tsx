@@ -5,12 +5,14 @@ import type { Exercise, RoutineItem } from '../db/types';
 import { estimateRoutineMinutes } from '../domain/estimate';
 import { formatDuration, formatKg, formatRest, summarizeSets } from '../domain/format';
 import { hasShortVersion, itemsForMode, type Mode } from '../domain/plan';
-import { navigate } from '../router';
+import { navigate, switchTab } from '../router';
+import { deleteRoutine, duplicateRoutineById, hasOriginal, restoreRoutine } from '../db/actions';
 import { Icon } from '../ui/Icon';
-import { Badge, Loading, NotFound, PendingNote, ScreenHeader, originLabel } from '../ui/common';
+import { Badge, ConfirmSheet, Loading, NotFound, PendingNote, ScreenHeader, originLabel } from '../ui/common';
 
 export function RoutineDetail({ id }: { id: string }) {
   const [mode, setMode] = useState<Mode>('completa');
+  const [confirm, setConfirm] = useState<'restaurar' | 'borrar' | null>(null);
   const data = useLiveQuery(async () => {
     const [routine, exercises] = await Promise.all([db.routines.get(id), db.exercises.toArray()]);
     return { routine, exercises };
@@ -37,7 +39,26 @@ export function RoutineDetail({ id }: { id: string }) {
           <Icon name="list" size={18} /> {items.length} ejercicios
         </span>
       </div>
+      {routine.version > 1 && (
+        <p className="hint">
+          Versión {routine.version} · modificada el {new Date(routine.updatedAt).toLocaleDateString('es-AR')}
+        </p>
+      )}
       {routine.notes && <p className="muted routine-notes">{routine.notes}</p>}
+      <div className="header-actions">
+        <button className="btn btn-sm" onClick={() => navigate(`/rutinas/${routine.id}/editar`)}>
+          <Icon name="edit" size={18} /> Editar
+        </button>
+        <button
+          className="btn btn-sm"
+          onClick={async () => {
+            const copyId = await duplicateRoutineById(routine.id);
+            navigate(`/rutinas/${copyId}`);
+          }}
+        >
+          <Icon name="copy" size={18} /> Duplicar
+        </button>
+      </div>
 
       {canShorten && (
         <div className="segmented two" role="group" aria-label="Versión">
@@ -49,9 +70,7 @@ export function RoutineDetail({ id }: { id: string }) {
           </button>
         </div>
       )}
-      {mode === 'corta' && (
-        <p className="hint">Propuesta de versión corta, pendiente de tu aprobación. No modifica la rutina original.</p>
-      )}
+      {mode === 'corta' && <p className="hint">Versión para cuando tenés poco tiempo. No modifica la rutina original.</p>}
 
       {groups.map((g) => (
         <section className="section" key={g.key}>
@@ -64,7 +83,48 @@ export function RoutineDetail({ id }: { id: string }) {
         </section>
       ))}
 
-      <p className="hint">La edición de rutinas (cambiar series, confirmar pendientes, reordenar) llega en la etapa 3.</p>
+      {items.length === 0 && <p className="muted">Esta rutina todavía no tiene ejercicios. Tocá «Editar» para agregarlos.</p>}
+
+      <div className="danger-zone">
+        {hasOriginal(routine.id) && routine.version > 1 && (
+          <button className="btn btn-ghost" onClick={() => setConfirm('restaurar')}>
+            Volver a la versión original
+          </button>
+        )}
+        <button className="btn btn-ghost link-danger" onClick={() => setConfirm('borrar')}>
+          Eliminar rutina
+        </button>
+      </div>
+
+      {confirm === 'restaurar' && (
+        <ConfirmSheet
+          title="¿Volver a la versión original?"
+          message="Se descartan los cambios que le hiciste a esta rutina y queda como vino en la app. Tu historial no se toca."
+          confirmLabel="Restaurar"
+          onCancel={() => setConfirm(null)}
+          onConfirm={async () => {
+            await restoreRoutine(routine.id);
+            setConfirm(null);
+          }}
+        />
+      )}
+      {confirm === 'borrar' && (
+        <ConfirmSheet
+          title={`¿Eliminar «${routine.name}»?`}
+          message={
+            routine.origin === 'profesor'
+              ? 'Es una rutina de tu profe. Si está planificada en la semana, ese día pasa a descanso. Tu historial no se borra.'
+              : 'Si está planificada en la semana, ese día pasa a descanso. Tu historial no se borra.'
+          }
+          confirmLabel="Eliminar"
+          danger
+          onCancel={() => setConfirm(null)}
+          onConfirm={async () => {
+            await deleteRoutine(routine.id);
+            switchTab('/rutinas');
+          }}
+        />
+      )}
     </>
   );
 }

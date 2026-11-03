@@ -116,10 +116,10 @@ try {
     check('rutina B: carga de referencia 25 kg', await has(page, '25 kg'));
     await shot(page, '04-rutina-b');
     await page.getByRole('button', { name: 'Tengo poco tiempo' }).click();
-    check('rutina B corta: 3 ejercicios y aviso de propuesta', await has(page, '3 ejercicios', 'pendiente de tu aprobación'));
+    check('rutina B corta: 3 ejercicios sin tocar la original', await has(page, '3 ejercicios', 'No modifica la rutina original'));
     await page.getByRole('button', { name: 'Completa' }).click();
     await page.getByRole('button', { name: /Peso muerto unilateral/ }).click();
-    check('ejercicio: instrucciones y aviso de medios honesto', await has(page, 'Cómo se hace', 'Sin video ni imagen verificados'));
+    check('ejercicio: instrucciones y aviso de medios honesto', await has(page, 'Cómo se hace', 'Todavía no hay video ni ilustración'));
     await page.getByRole('button', { name: 'Volver' }).click();
     check('volver: regresa a la Rutina B', await has(page, 'Vuelos posteriores') && (await title(page)) === 'Rutina B');
 
@@ -164,6 +164,147 @@ try {
     await shot(page, '08-ajustes');
 
     check('lunes: sin errores en consola', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+
+  // ——— Etapa 3: imágenes, videos propios y edición ———
+  {
+    const { context, page, errors } = await openAt('2026-11-02T20:00:00-03:00');
+    const go = async (hash, wait) => {
+      await page.goto(`${BASE}${hash}`);
+      await page.getByText(wait).first().waitFor({ timeout: 5000 });
+    };
+
+    // Ilustración con licencia, animada, con créditos.
+    await go('#/ejercicios/sentadilla-smith', 'Cómo se hace');
+    const img = page.locator('.media-illustration img.is-visible');
+    await img.waitFor();
+    const loaded = await img.evaluate((el) => el.complete && el.naturalWidth > 0 && el.src.includes('media/everkinetic/0124'));
+    check('ilustración: carga la imagen incluida en la app', loaded);
+    check('ilustración: aclara que no es un video y muestra la licencia', await has(page, 'no es un video', 'Everkinetic', 'CC BY-SA 4.0'));
+    await page.getByRole('button', { name: 'Pausar', exact: true }).click();
+    check('ilustración: se puede pausar', await page.getByRole('button', { name: 'Animar', exact: true }).isVisible());
+    await shot(page, '11-ejercicio-ilustracion');
+    await go('#/ejercicios/jalon-al-pecho', 'Cómo se hace');
+    check('ilustración por variante: jalón con agarre neutro', await has(page, 'Muestra el agarre neutro'));
+
+    // Sin ilustración: aviso honesto + agregar video/foto propio.
+    await go('#/ejercicios/hip-thrust-maquina', 'Cómo se hace');
+    check('sin ilustración: aviso honesto', await has(page, 'Todavía no hay video ni ilustración'));
+    const yt = await page.getByRole('link', { name: /Buscar en YouTube/ }).getAttribute('href');
+    check('buscar en YouTube: enlace de búsqueda', yt?.startsWith('https://www.youtube.com/results?search_query=') ?? false, yt);
+    await shot(page, '12-ejercicio-sin-medios');
+    await page.locator('input[type=file]').setInputFiles({
+      name: 'foto.png',
+      mimeType: 'image/png',
+      buffer: readFileSync('public/media/everkinetic/0124-a.png'),
+    });
+    await page.getByRole('dialog', { name: 'Guardar foto' }).getByRole('button', { name: 'Guardar' }).click();
+    check('foto propia: se guarda y se muestra', await has(page, 'Tu foto'));
+    // Video corto generado en el navegador (WebM).
+    const webm = await page.evaluate(async () => {
+      const canvas = Object.assign(document.createElement('canvas'), { width: 160, height: 120 });
+      const ctx = canvas.getContext('2d');
+      const rec = new MediaRecorder(canvas.captureStream(15), { mimeType: 'video/webm' });
+      const chunks = [];
+      rec.ondataavailable = (e) => chunks.push(e.data);
+      rec.start();
+      for (let i = 0; i < 10; i++) {
+        ctx.fillStyle = i % 2 ? '#5cb8a0' : '#222';
+        ctx.fillRect(0, 0, 160, 120);
+        await new Promise((r) => setTimeout(r, 60));
+      }
+      await new Promise((r) => {
+        rec.onstop = r;
+        rec.stop();
+      });
+      return Array.from(new Uint8Array(await new Blob(chunks).arrayBuffer()));
+    });
+    await page.locator('input[type=file]').setInputFiles({ name: 'clip.webm', mimeType: 'video/webm', buffer: Buffer.from(webm) });
+    await page.getByRole('dialog', { name: 'Guardar video' }).getByRole('button', { name: 'Guardar' }).click();
+    check('video propio: se guarda y se reproduce', await has(page, 'Tu video') && (await page.locator('video.media-own').count()) === 1);
+    await shot(page, '13-ejercicio-video-propio');
+    await reload(page);
+    check('videos y fotos propios: persisten tras recargar', await has(page, 'Tu video', 'Tu foto'));
+    await page.getByRole('button', { name: 'Tu video' }).click();
+    await page.getByRole('button', { name: 'Borrar' }).first().click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Borrar' }).click();
+    check('borrar medio: pide confirmación y borra el elegido', (await lacks(page, 'Tu video')) && (await has(page, 'Tu foto')));
+
+    // Editar una rutina: confirmar el press de banca, reordenar, agregar ejercicio.
+    await go('#/rutinas/rutina-a', 'Sentadilla en Smith');
+    await page.getByRole('button', { name: 'Editar' }).click();
+    await has(page, 'Editar rutina');
+    check('editor: sin barra de navegación', (await page.getByRole('navigation', { name: 'Secciones' }).count()) === 0);
+    await page.locator('article', { hasText: 'Press de banca' }).getByRole('button', { name: 'Editar' }).click();
+    const sheet = page.getByRole('dialog');
+    await sheet.getByLabel('Tipo de objetivo').selectOption('reps');
+    for (const [i, v] of [[1, '12'], [2, '10'], [3, '8'], [4, '6']]) await sheet.getByLabel(`Repeticiones serie ${i}`).fill(v);
+    await sheet.getByRole('button', { name: 'Marcar como confirmado' }).click();
+    await sheet.getByRole('switch', { name: /Carga ascendente/ }).check();
+    check('editor de ejercicio: sin scroll horizontal', await noHorizontalScroll(page));
+    await shot(page, '14-editor-ejercicio-en-rutina');
+    await sheet.getByRole('button', { name: 'Listo' }).click();
+    check('editor: aplica el cambio al borrador', await has(page, '12 · 10 · 8 · 6'));
+    await page.getByRole('button', { name: 'Subir Gemelos sentado' }).click();
+    await page.getByRole('button', { name: 'Agregar ejercicio' }).click();
+    await page.getByRole('dialog').getByRole('searchbox').fill('flexiones');
+    await page.getByRole('dialog').getByRole('button', { name: /Flexiones de brazos/ }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Listo' }).click();
+    await shot(page, '15-editor-rutina');
+    await page.getByRole('button', { name: 'Guardar cambios' }).click();
+    check('rutina editada: versión 2, 10 ejercicios', await has(page, 'Versión 2', '10 ejercicios'));
+    check('rutina editada: press confirmado con carga ascendente', (await page.locator('article', { hasText: 'Press de banca' }).innerText()).includes('Carga ascendente'));
+    check('rutina editada: el press ya no está pendiente', !(await page.locator('article', { hasText: 'Press de banca' }).getByText('Pendiente de confirmar').count()));
+    const order = await page.locator('.item-name').allInnerTexts();
+    check('rutina editada: gemelos subió un lugar', order.indexOf('Gemelos sentado') === order.indexOf('Sentadilla isométrica') - 1, order.join(', '));
+    await reload(page);
+    check('rutina editada: persiste tras recargar', await has(page, 'Versión 2', 'Flexiones de brazos'));
+    await page.getByRole('button', { name: 'Volver a la versión original' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Restaurar' }).click();
+    check('restaurar: vuelve la versión original (9 ejercicios, press pendiente)', await has(page, '9 ejercicios', 'Versión 3', '¿También es 12, 10, 8 y 6'));
+
+    // Descartar cambios pide confirmación.
+    await page.getByRole('button', { name: 'Editar' }).click();
+    await page.getByLabel('Nombre').fill('Otro nombre');
+    await page.getByRole('button', { name: 'Descartar' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Descartar' }).click();
+    check('descartar: no guarda el nombre', (await title(page)) === 'Rutina A');
+
+    // Cambiar un día de la semana.
+    await page.getByRole('link', { name: 'Rutinas' }).click();
+    await page.getByRole('button', { name: 'Cambiar días' }).click();
+    await page.getByRole('button', { name: 'Cambiar domingo' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: /Cardio y movilidad/ }).click();
+    await page.getByRole('button', { name: 'Listo' }).click();
+    check('semana: el domingo pasa a Cardio y movilidad', (await page.locator('li', { hasText: 'DOM' }).innerText()).includes('Cardio y movilidad'));
+
+    // Registro histórico → rutina alternativa.
+    await page.getByRole('link', { name: 'Progreso' }).click();
+    await page.getByText('Piernas y abdomen').click();
+    await page.getByRole('button', { name: 'Usar como rutina alternativa' }).click();
+    check('histórico → rutina: crea rutina personal de 7 ejercicios', await has(page, 'Piernas y abdomen', '7 ejercicios', 'Personal'));
+    check('histórico → rutina: conserva la carga como referencia', await has(page, '50 kg'));
+
+    // Completar un ejercicio pendiente de la biblioteca.
+    await go('#/ejercicios/movilidad-cadera', 'Cómo se hace');
+    await page.getByRole('button', { name: 'Editar ejercicio' }).click();
+    await page.getByLabel('Cómo se hace').fill('Paso uno de prueba\nPaso dos de prueba');
+    await page.getByRole('button', { name: 'Marcar como confirmado' }).click();
+    await page.getByRole('button', { name: 'Guardar' }).click();
+    check('editar ejercicio: guarda los pasos y quita el pendiente', (await has(page, 'Paso dos de prueba')) && !(await page.getByText('Pendiente de confirmar').count()));
+
+    // Ejercicio nuevo.
+    await page.getByRole('link', { name: 'Ejercicios' }).click();
+    await page.getByRole('button', { name: 'Nuevo' }).click();
+    await page.getByLabel('Nombre', { exact: true }).fill('Remo con mancuerna');
+    await page.getByRole('button', { name: 'Mancuernas' }).click();
+    await page.getByRole('button', { name: 'Guardar' }).click();
+    await page.locator('h1', { hasText: 'Remo con mancuerna' }).waitFor({ timeout: 4000 }).catch(() => {});
+    await shot(page, '16-ejercicio-nuevo');
+    check('ejercicio nuevo: se crea y se abre', (await title(page)) === 'Remo con mancuerna', await title(page));
+
+    check('etapa 3: sin errores en consola', errors.length === 0, errors.join(' | '));
     await context.close();
   }
 

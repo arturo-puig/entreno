@@ -35,7 +35,12 @@ export function Exercises() {
 
   return (
     <>
-      <ScreenHeader title="Ejercicios" />
+      <div className="title-row">
+        <ScreenHeader title="Ejercicios" />
+        <button className="btn btn-sm" onClick={() => navigate('/ejercicios/nuevo')}>
+          <Icon name="plus" size={18} /> Nuevo
+        </button>
+      </div>
       <div className="search">
         <Icon name="search" size={20} />
         <input

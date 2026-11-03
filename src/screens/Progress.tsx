@@ -2,7 +2,9 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { formatLoggedSet } from '../domain/format';
 import { navigate } from '../router';
+import { routineFromSession } from '../db/actions';
 import { EmptyState, Loading, ScreenHeader } from '../ui/common';
+import { Icon } from '../ui/Icon';
 
 export function Progress() {
   const data = useLiveQuery(async () => {
@@ -56,6 +58,18 @@ export function Progress() {
                   ))}
                 </ul>
                 {s.note && <p className="hint">{s.note}</p>}
+                <div className="details-actions">
+                  <button
+                    className="btn btn-sm"
+                    onClick={async () => {
+                      const id = await routineFromSession(s.id);
+                      navigate(`/rutinas/${id}`);
+                    }}
+                  >
+                    <Icon name="copy" size={18} /> Usar como rutina alternativa
+                  </button>
+                  <p className="hint">Crea una rutina editable a partir de este registro. El registro original no cambia.</p>
+                </div>
               </details>
             ))}
           </div>
