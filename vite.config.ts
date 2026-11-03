@@ -46,6 +46,8 @@ function serviceWorker(): Plugin {
 export default defineConfig({
   base: './',
   plugins: [react(), serviceWorker()],
+  // Un solo archivo de ~520 KB (≈160 KB comprimido): se baja una vez y queda guardado para usar sin conexión.
+  build: { chunkSizeWarningLimit: 700 },
   test: {
     environment: 'node',
   },

@@ -559,6 +559,64 @@ try {
     await context.close();
   }
 
+  // ——— Etapa 7: asistente ———
+  {
+    const { context, page, errors } = await openAt('2026-11-03T08:00:00-03:00'); // martes
+    const ask = async (t) => {
+      await page.getByLabel('Pedile algo al asistente').fill(t);
+      await page.getByLabel('Pedile algo al asistente').press('Enter');
+    };
+    const lastBot = () => page.locator('.bubble-bot').last();
+
+    await page.getByRole('button', { name: /Pedile algo/ }).click();
+    check('asistente: abre con saludo y ejemplos', await has(page, 'nunca invento números', 'Continuar con:'));
+    check('asistente: sin barra de navegación', (await page.getByRole('navigation', { name: 'Secciones' }).count()) === 0);
+
+    await ask('tengo 20 minutos');
+    check('asistente: propone la versión corta con confirmación', await has(page, 'Te sirve la versión corta de Tren superior'));
+    await lastBot().getByRole('button', { name: 'Usar versión corta' }).click();
+    check('asistente: confirma lo que hizo', await has(page, 'hoy usás la versión corta'));
+
+    await ask('anotá pádel 90 minutos');
+    await shot(page, '27-asistente');
+    await lastBot().getByRole('button', { name: 'Sí, anotar' }).click();
+    check('asistente: anota la actividad después del Sí', await has(page, 'Anotado: Pádel · 90 min'));
+
+    await ask('peso 82,5');
+    await lastBot().getByRole('button', { name: 'No', exact: true }).click();
+    check('asistente: «No» no cambia nada', await has(page, 'no cambié nada'));
+
+    // Enseñarle un nombre nuevo.
+    await ask('como se hace la remada alta');
+    check('asistente: pregunta si no reconoce el ejercicio', await has(page, 'No reconozco «remada alta»'));
+    await lastBot().getByRole('button', { name: 'Remo sentado en polea' }).click();
+    await lastBot().getByRole('button', { name: /Recordar «remada alta»/ }).click();
+    check('asistente: recuerda el nombre enseñado', await has(page, 'ahora también es Remo sentado en polea'));
+    await ask('como se hace la remada alta');
+    check('asistente: lo reconoce la próxima vez', (await lastBot().innerText()).includes('Remo sentado en polea:'));
+    await lastBot().getByRole('button', { name: 'No útil' }).click();
+
+    await ask('me duele la rodilla en la sentadilla');
+    check('asistente: no diagnostica', await has(page, 'No puedo evaluar dolores'));
+    await ask('asdf qwerty');
+    check('asistente: dice cuando no entiende', await has(page, 'No te entendí'));
+    check('asistente: sin scroll horizontal', await noHorizontalScroll(page));
+    await shot(page, '28-asistente-conversacion');
+
+    await ask('¿Cómo se hace el Pallof?');
+    await lastBot().getByRole('button', { name: /Ver ficha|Ver imagen/ }).click();
+    check('asistente: lleva a la ficha del ejercicio', await has(page, 'Pallof press', 'Cómo se hace'));
+
+    await page.goto(`${BASE}#/hoy`);
+    check('hoy: la versión corta quedó activa', await page.getByRole('switch').isChecked());
+    check('hoy: el pádel quedó registrado', await has(page, 'Hoy registraste', 'Pádel'));
+    await page.getByRole('link', { name: 'Ajustes' }).click();
+    check('ajustes: registro del asistente para revisar', await has(page, 'no entendidos', '1 marcados como no útiles'));
+
+    check('etapa 7: sin errores en consola', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+
   // ——— Martes sin haber hecho la A: sugerencia sin deuda ———
   {
     const { context, page, errors } = await openAt('2026-10-27T08:00:00-03:00');

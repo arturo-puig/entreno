@@ -11,8 +11,9 @@ import { Settings } from './screens/Settings';
 import { RoutineEditor } from './screens/RoutineEditor';
 import { ExerciseEditor } from './screens/ExerciseEditor';
 import { SessionScreen } from './screens/Session';
+import { AssistantScreen } from './screens/Assistant';
 
-const TABS = ['hoy', 'rutinas', 'ejercicios', 'progreso', 'ajustes', 'sesion'];
+const TABS = ['hoy', 'rutinas', 'ejercicios', 'progreso', 'ajustes', 'sesion', 'asistente'];
 
 export function App() {
   const route = useRoute();
@@ -22,7 +23,7 @@ export function App() {
   const key = route.join('/');
   // Los editores ocupan toda la pantalla: sin barra de navegación para no perder cambios por un toque.
   const isEditor = action === 'editar' || (tab === 'ejercicios' && detail === 'nuevo');
-  const isSession = tab === 'sesion' && !!detail;
+  const isSession = (tab === 'sesion' && !!detail) || tab === 'asistente';
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -53,6 +54,8 @@ function renderScreen(tab: string, detail?: string, action?: string) {
       return <Settings />;
     case 'sesion':
       return detail ? <SessionScreen id={detail} /> : <Today />;
+    case 'asistente':
+      return <AssistantScreen />;
     default:
       return <Today />;
   }

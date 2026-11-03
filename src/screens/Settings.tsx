@@ -38,6 +38,7 @@ export function Settings() {
   const [deleting, setDeleting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const lastExport = useLiveQuery(() => db.meta.get('lastExportAt'));
+  const assistantLog = useLiveQuery(() => db.assistantLog.orderBy('at').reverse().toArray());
   const prefs = useLiveQuery(async () => ({ ...DEFAULT_PREFS, ...((await db.meta.get('prefs'))?.value as Partial<Prefs> | undefined) }));
 
   useEffect(() => {
@@ -148,6 +149,38 @@ export function Settings() {
             Mientras entrenás, la pantalla queda encendida para que el temporizador funcione. Si la bloqueás, el aviso
             puede no llegar: el navegador no deja vibrar con la pantalla apagada.
           </p>
+        </div>
+      </section>
+
+      <section className="section">
+        <h2 className="section-title">Asistente</h2>
+        <div className="card stack-sm">
+          {!assistantLog?.length ? (
+            <p className="muted">Todavía no le pediste nada al asistente.</p>
+          ) : (
+            <>
+              <p>
+                {assistantLog.length} pedidos · {assistantLog.filter((q) => q.intent === 'no-entendi').length} no entendidos ·{' '}
+                {assistantLog.filter((q) => q.feedback === 'no-util').length} marcados como no útiles.
+              </p>
+              {assistantLog.some((q) => q.intent === 'no-entendi' || q.feedback === 'no-util') && (
+                <details className="table-view">
+                  <summary>Ver pedidos para revisar</summary>
+                  <ul className="bullets">
+                    {assistantLog
+                      .filter((q) => q.intent === 'no-entendi' || q.feedback === 'no-util')
+                      .slice(0, 30)
+                      .map((q) => (
+                        <li key={q.id}>
+                          «{q.text}» <span className="hint">({q.intent === 'no-entendi' ? 'no entendido' : 'no útil'})</span>
+                        </li>
+                      ))}
+                  </ul>
+                </details>
+              )}
+            </>
+          )}
+          <p className="hint">Los pedidos quedan solo en el celular. Sirven para mejorar el asistente con frases reales: revisalos de vez en cuando.</p>
         </div>
       </section>
 

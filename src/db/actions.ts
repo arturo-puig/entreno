@@ -1,5 +1,5 @@
 import { db, getWeekPlan, setWeekPlan } from './db';
-import type { DayPlan, Exercise, Prefs, Readiness, Routine, Session, UserMedia } from './types';
+import type { AssistantLogEntry, DayPlan, Exercise, Prefs, Readiness, Routine, Session, UserMedia } from './types';
 import type { Mode } from '../domain/plan';
 import { createSession, sessionStatus, staleSessions } from '../domain/session';
 import { createActivity } from '../domain/stats';
@@ -226,4 +226,25 @@ export async function saveBodyMetric(params: { date: string; weightKg?: number; 
 /** Acto: borra un registro de peso (se confirma en la interfaz). */
 export async function deleteBodyMetric(id: string): Promise<void> {
   await db.bodyMetrics.delete(id);
+}
+
+// ——— Asistente ———
+
+/** Registro: guarda lo que pediste y cómo se interpretó (solo en el celular). */
+export async function logAssistant(entry: Omit<AssistantLogEntry, 'id' | 'at'>): Promise<string> {
+  const id = `q-${uid()}`;
+  await db.assistantLog.add({ id, at: new Date().toISOString(), ...entry });
+  return id;
+}
+
+export async function setAssistantFeedback(id: string, feedback: AssistantLogEntry['feedback']): Promise<void> {
+  await db.assistantLog.update(id, { feedback });
+}
+
+/** Acto (con tu toque): agrega un nombre alternativo a un ejercicio, para que el asistente y la búsqueda lo reconozcan. */
+export async function addExerciseAlias(exerciseId: string, alias: string): Promise<void> {
+  const e = await db.exercises.get(exerciseId);
+  if (!e) return;
+  const aliases = [...new Set([...(e.aliases ?? []), alias])];
+  await db.exercises.update(exerciseId, { aliases });
 }

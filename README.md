@@ -6,6 +6,8 @@ App personal de entrenamiento para usar en el celular durante el gimnasio: qué 
 
 Abrí https://arturo-puig.github.io/entreno/ en Chrome desde el celular y elegí **menú ⋮ → Instalar app** (o el botón en **Ajustes**). Una vez abierta con internet, funciona sin señal.
 
+En **Hoy** tenés la barra «Pedile algo…»: el asistente responde con tus datos (qué toca, cómo se hace un ejercicio, la última vez, anotar pádel o peso) y pide confirmación antes de anotar o cambiar algo. Funciona sin internet y no usa servicios pagos.
+
 **Tus datos viven solo en ese celular, dentro de Chrome.** Si borrás los datos del navegador o cambiás de teléfono, se pierden. Exportá una copia desde **Ajustes → Exportar datos** antes de hacerlo.
 
 ## Desarrollo

@@ -83,6 +83,11 @@ export function Today() {
         <p className="today-date">{dayAndMonth(now)}</p>
       </header>
 
+      <button className="ask-bar" onClick={() => navigate('/asistente')}>
+        <Icon name="spark" size={20} />
+        <span>Pedile algo… «tengo 20 minutos»</span>
+      </button>
+
       {pwa.updateReady && (
         <div className="notice notice-accent">
           <Icon name="download" size={20} />
