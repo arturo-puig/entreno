@@ -35,17 +35,16 @@ export type MovementType =
   | 'Cardio'
   | 'Movilidad';
 
-export interface MediaRef {
+/** Video o foto propios, guardados solo en este dispositivo. */
+export interface UserMedia {
   id: string;
-  kind: 'video' | 'imagen' | 'animacion';
-  /** propio = grabado por vos; licencia-abierta = recurso con licencia verificada */
-  source: 'propio' | 'licencia-abierta';
+  exerciseId: string;
   variant?: string;
-  blobId?: string;
-  url?: string;
-  license?: string;
-  author?: string;
-  sourceUrl?: string;
+  kind: 'video' | 'imagen';
+  mime: string;
+  blob: Blob;
+  size: number;
+  createdAt: string;
 }
 
 export interface Exercise {
@@ -64,7 +63,6 @@ export interface Exercise {
   commonErrors: string[];
   variants?: string[];
   substitutions?: string[];
-  media: MediaRef[];
   /** Pregunta abierta sobre el ejercicio en sí */
   pending?: string;
   custom?: boolean;

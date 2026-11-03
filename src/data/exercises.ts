@@ -1,7 +1,8 @@
 import type { Exercise } from '../db/types';
 
 // Biblioteca inicial. Las descripciones marcadas como «estándar» son genéricas:
-// validalas con tu profe. Ningún ejercicio trae imagen ni video todavía (etapa 5).
+// validalas con tu profe. Las ilustraciones están en ./media.ts; los videos y fotos
+// propios se guardan en la base local (tabla userMedia).
 
 const STD = 'Descripción estándar; validala con tu profe.';
 
@@ -29,7 +30,6 @@ export const EXERCISES: Exercise[] = [
       'Dejar que la rodilla se vaya hacia adentro.',
       'Rebotar en lugar de moverte de forma controlada.',
     ],
-    media: [],
   },
   {
     id: 'manguito-rotador-banda',
@@ -52,7 +52,6 @@ export const EXERCISES: Exercise[] = [
       'Usar una banda tan dura que pierdas la posición del codo.',
       'Hacerlo rápido: es un ejercicio de control.',
     ],
-    media: [],
   },
   {
     id: 'movilidad-cadera',
@@ -65,7 +64,6 @@ export const EXERCISES: Exercise[] = [
     instructions: [],
     commonErrors: [],
     pending: '¿Qué ejercicio de movilidad de cadera te indicó tu profe?',
-    media: [],
   },
   {
     id: 'gato-vaca',
@@ -83,7 +81,6 @@ export const EXERCISES: Exercise[] = [
     ],
     instructionsNote: STD,
     commonErrors: ['Mover solo el cuello.', 'Hacerlo rápido o forzar el final del movimiento.'],
-    media: [],
   },
 
   // ——— Core ———
@@ -108,7 +105,6 @@ export const EXERCISES: Exercise[] = [
       'Rotar con impulso en lugar de controlar el movimiento.',
     ],
     substitutions: ['plancha-frontal', 'pallof-press'],
-    media: [],
   },
   {
     id: 'plancha-frontal',
@@ -132,7 +128,6 @@ export const EXERCISES: Exercise[] = [
       'Hundir el pecho entre los hombros.',
     ],
     substitutions: ['dead-bug', 'plancha-lateral-rotacion'],
-    media: [],
   },
   {
     id: 'pallof-press',
@@ -157,7 +152,6 @@ export const EXERCISES: Exercise[] = [
     ],
     variants: ['Con banda elástica', 'En polea'],
     substitutions: ['plancha-frontal', 'dead-bug'],
-    media: [],
   },
   {
     id: 'dead-bug',
@@ -177,7 +171,6 @@ export const EXERCISES: Exercise[] = [
     instructionsNote: STD,
     commonErrors: ['Despegar la zona lumbar del piso.', 'Ir rápido.', 'Contener la respiración.'],
     substitutions: ['plancha-frontal'],
-    media: [],
   },
   {
     id: 'abdominales-banco-inclinado',
@@ -195,7 +188,6 @@ export const EXERCISES: Exercise[] = [
     ],
     instructionsNote: 'Descripción estándar del banco declinado; confirmá que es el que usaste.',
     commonErrors: ['Tirar de la cabeza con las manos.', 'Bajar de golpe.'],
-    media: [],
   },
 
   // ——— Piernas y glúteos ———
@@ -223,7 +215,6 @@ export const EXERCISES: Exercise[] = [
       'Olvidar ajustar los topes de seguridad.',
     ],
     substitutions: ['sentadilla-bulgara'],
-    media: [],
   },
   {
     id: 'hip-thrust-maquina',
@@ -249,7 +240,6 @@ export const EXERCISES: Exercise[] = [
       'Empujar con las puntas de los pies.',
     ],
     substitutions: ['sentadilla-bulgara', 'peso-muerto-unilateral'],
-    media: [],
   },
   {
     id: 'sentadilla-isometrica',
@@ -272,7 +262,6 @@ export const EXERCISES: Exercise[] = [
       'Apoyar las manos en los muslos.',
     ],
     variants: ['Contra la pared', 'Libre'],
-    media: [],
   },
   {
     id: 'sentadilla-bulgara',
@@ -295,7 +284,6 @@ export const EXERCISES: Exercise[] = [
       'Empujar con la pierna de atrás.',
     ],
     substitutions: ['sentadilla-smith'],
-    media: [],
   },
   {
     id: 'peso-muerto-unilateral',
@@ -320,7 +308,6 @@ export const EXERCISES: Exercise[] = [
       'Flexionar demasiado la rodilla de apoyo.',
     ],
     substitutions: ['hip-thrust-maquina', 'curl-femoral-sentado'],
-    media: [],
   },
   {
     id: 'curl-femoral-sentado',
@@ -343,7 +330,6 @@ export const EXERCISES: Exercise[] = [
       'Volver sin control.',
     ],
     substitutions: ['peso-muerto-unilateral'],
-    media: [],
   },
   {
     id: 'extension-cuadriceps',
@@ -366,7 +352,6 @@ export const EXERCISES: Exercise[] = [
       'Patear con impulso.',
       'Despegar la cadera del asiento.',
     ],
-    media: [],
   },
   {
     id: 'sentadilla-maquina-guiada',
@@ -379,7 +364,6 @@ export const EXERCISES: Exercise[] = [
     instructions: [],
     commonErrors: [],
     pending: '¿Es la misma Smith de la rutina A o es otra máquina?',
-    media: [],
   },
   {
     id: 'gemelos-sentado',
@@ -398,7 +382,6 @@ export const EXERCISES: Exercise[] = [
     instructionsNote: STD,
     commonErrors: ['Rango de movimiento corto.', 'Rebotar abajo.', 'Ir demasiado rápido.'],
     substitutions: ['gemelos-pie'],
-    media: [],
   },
   {
     id: 'gemelos-pie',
@@ -417,7 +400,6 @@ export const EXERCISES: Exercise[] = [
     instructionsNote: STD,
     commonErrors: ['Rango de movimiento corto.', 'Rebotar abajo.', 'Flexionar las rodillas para ayudarte.'],
     substitutions: ['gemelos-sentado'],
-    media: [],
   },
   {
     id: 'elevacion-talones-maquina',
@@ -430,7 +412,6 @@ export const EXERCISES: Exercise[] = [
     instructions: [],
     commonErrors: [],
     pending: '¿Es la máquina de gemelos de pie o la de sentado?',
-    media: [],
   },
 
   // ——— Pecho ———
@@ -458,7 +439,6 @@ export const EXERCISES: Exercise[] = [
       'Trabajar cerca del fallo sin topes de seguridad ni ayudante.',
     ],
     substitutions: ['press-pecho-maquina', 'press-inclinado-mancuernas', 'flexiones'],
-    media: [],
   },
   {
     id: 'press-inclinado-mancuernas',
@@ -477,7 +457,6 @@ export const EXERCISES: Exercise[] = [
     instructionsNote: STD,
     commonErrors: ['Arquear en exceso la zona lumbar.', 'Abrir los codos a 90°.', 'Bajar sin control.'],
     substitutions: ['press-banca-barra', 'press-pecho-maquina'],
-    media: [],
   },
   {
     id: 'press-pecho-maquina',
@@ -500,7 +479,6 @@ export const EXERCISES: Exercise[] = [
       'Bloquear los codos de golpe.',
     ],
     substitutions: ['press-banca-barra', 'press-inclinado-mancuernas'],
-    media: [],
   },
   {
     id: 'flexiones',
@@ -520,7 +498,6 @@ export const EXERCISES: Exercise[] = [
     instructionsNote: STD,
     commonErrors: ['Cadera caída.', 'Codos abiertos a 90°.', 'Rango corto.'],
     substitutions: ['press-pecho-maquina'],
-    media: [],
   },
 
   // ——— Espalda ———
@@ -547,7 +524,6 @@ export const EXERCISES: Exercise[] = [
     ],
     variants: ['Agarre abierto', 'Agarre neutro'],
     substitutions: ['remo-sentado-polea'],
-    media: [],
   },
   {
     id: 'remo-sentado-polea',
@@ -571,7 +547,6 @@ export const EXERCISES: Exercise[] = [
       'Tirar solo con los brazos.',
     ],
     substitutions: ['jalon-al-pecho'],
-    media: [],
   },
 
   // ——— Hombros ———
@@ -596,8 +571,8 @@ export const EXERCISES: Exercise[] = [
       'Subir los codos por encima de los hombros si aparece molestia.',
       'Balancear el cuerpo para subir el peso.',
     ],
+    variants: ['Con barra', 'En polea', 'Con mancuernas'],
     substitutions: ['elevaciones-laterales'],
-    media: [],
   },
   {
     id: 'elevaciones-laterales',
@@ -621,7 +596,6 @@ export const EXERCISES: Exercise[] = [
       'Subir por encima de los hombros si aparece molestia.',
     ],
     substitutions: ['remo-al-menton'],
-    media: [],
   },
   {
     id: 'vuelos-posteriores',
@@ -640,7 +614,7 @@ export const EXERCISES: Exercise[] = [
     ],
     instructionsNote: STD,
     commonErrors: ['Tirar con la espalda en lugar del hombro.', 'Usar impulso.', 'Redondear la espalda.'],
-    media: [],
+    variants: ['De pie, inclinado', 'Con la frente apoyada en banco inclinado', 'En máquina'],
   },
 
   // ——— Brazos ———
@@ -662,7 +636,6 @@ export const EXERCISES: Exercise[] = [
     instructionsNote: STD,
     commonErrors: ['Adelantar los codos al subir.', 'Balancear el cuerpo.', 'No extender por completo abajo.'],
     substitutions: ['curl-biceps-mancuernas'],
-    media: [],
   },
   {
     id: 'curl-biceps-mancuernas',
@@ -682,7 +655,6 @@ export const EXERCISES: Exercise[] = [
     instructionsNote: STD,
     commonErrors: ['Balancear el cuerpo.', 'Adelantar los codos.', 'Rango corto.'],
     substitutions: ['curl-biceps-inclinado'],
-    media: [],
   },
   {
     id: 'triceps-polea-barra',
@@ -704,7 +676,6 @@ export const EXERCISES: Exercise[] = [
       'Inclinarte sobre la barra para usar el peso del cuerpo.',
       'Rango corto.',
     ],
-    media: [],
   },
 
   // ——— Cardio ———
@@ -728,7 +699,6 @@ export const EXERCISES: Exercise[] = [
       'Ir tan rápido que no puedas hablar: se pierde el objetivo aeróbico.',
     ],
     substitutions: ['bicicleta-fija'],
-    media: [],
   },
   {
     id: 'bicicleta-fija',
@@ -749,7 +719,6 @@ export const EXERCISES: Exercise[] = [
       'Resistencia tan alta que no puedas hablar.',
     ],
     substitutions: ['caminata-cinta'],
-    media: [],
   },
   {
     id: 'trote-cinta',
@@ -766,7 +735,6 @@ export const EXERCISES: Exercise[] = [
     ],
     commonErrors: ['Empezar demasiado rápido.'],
     substitutions: ['caminata-cinta', 'bicicleta-fija'],
-    media: [],
   },
   {
     id: 'caminata',
@@ -780,6 +748,5 @@ export const EXERCISES: Exercise[] = [
     instructions: ['Ritmo cómodo: tenés que poder conversar sin esfuerzo.'],
     commonErrors: [],
     substitutions: ['bicicleta-fija'],
-    media: [],
   },
 ];

@@ -60,3 +60,38 @@ describe('ensureSeed', () => {
     db.close();
   });
 });
+
+describe('ilustraciones', async () => {
+  const { ILLUSTRATIONS } = await import('./media');
+  // Lista los archivos reales de public/ (sin depender de las APIs de Node).
+  const files = new Set(Object.keys(import.meta.glob('/public/media/**/*.png')));
+  const existsSync = (path: string) => files.has(`/${path}`);
+
+  it('cada ilustración apunta a un ejercicio existente y a archivos que existen', () => {
+    for (const [exerciseId, list] of Object.entries(ILLUSTRATIONS)) {
+      expect(exerciseIds, exerciseId).toContain(exerciseId);
+      for (const ill of list) for (const f of ill.frames) expect(existsSync(`public/${f}`), f).toBe(true);
+    }
+  });
+
+  it('las variantes ilustradas existen en el ejercicio', () => {
+    for (const [exerciseId, list] of Object.entries(ILLUSTRATIONS)) {
+      const ex = EXERCISES.find((e) => e.id === exerciseId)!;
+      for (const ill of list) if (ill.variant) {
+        expect(ex.variants ?? [], `${exerciseId}: ${ill.variant}`).toContain(ill.variant);
+      }
+    }
+  });
+});
+
+describe('actualización de la carga inicial', () => {
+  it('suma variantes nuevas sin borrar las agregadas por vos', async () => {
+    const db = new EntrenoDB(`test-${Math.random()}`);
+    await ensureSeed(db);
+    await db.exercises.update('remo-al-menton', { variants: ['Mi variante'] });
+    await db.meta.put({ key: 'seedRevision', value: 1 });
+    await ensureSeed(db);
+    expect((await db.exercises.get('remo-al-menton'))?.variants).toEqual(['Mi variante', 'Con barra', 'En polea', 'Con mancuernas']);
+    db.close();
+  });
+});

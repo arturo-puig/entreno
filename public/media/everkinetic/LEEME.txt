@@ -1,0 +1,8 @@
+Ilustraciones de ejercicios: Everkinetic — https://github.com/everkinetic/data
+Autores: Greg Priday y Frank Paczynski.
+Licencia: Creative Commons Atribución-CompartirIgual 4.0 Internacional (CC BY-SA 4.0)
+https://creativecommons.org/licenses/by-sa/4.0/deed.es
+
+Cambios: redimensionadas a 640 px y reducidas a 16 tonos de gris.
+Estas imágenes adaptadas se distribuyen bajo la misma licencia CC BY-SA 4.0.
+Archivo «-a» = archivo «relaxation» del original; «-b» = «tension».

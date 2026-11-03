@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { DayPlan, DayState, Exercise, MetaEntry, Routine, Session } from './types';
+import type { DayPlan, DayState, Exercise, MetaEntry, Routine, Session, UserMedia } from './types';
 import { EXERCISES } from '../data/exercises';
 import { ROUTINES, WEEK_PLAN } from '../data/routines';
 import { HISTORY } from '../data/history';
@@ -11,6 +11,7 @@ export class EntrenoDB extends Dexie {
   sessions!: Table<Session, string>;
   days!: Table<DayState, string>;
   meta!: Table<MetaEntry, string>;
+  userMedia!: Table<UserMedia, string>;
 
   constructor(name = 'entreno') {
     super(name);
@@ -22,13 +23,15 @@ export class EntrenoDB extends Dexie {
       days: 'date',
       meta: 'key',
     });
+    // v2: videos y fotos propios por ejercicio.
+    this.version(2).stores({ userMedia: 'id, exerciseId' });
   }
 }
 
 export const db = new EntrenoDB();
 
-/** Subir este número cuando se agreguen ejercicios o rutinas nuevas a la carga inicial. */
-export const SEED_REVISION = 1;
+/** Subir este número cuando se agreguen ejercicios, rutinas o variantes a la carga inicial. */
+export const SEED_REVISION = 2;
 
 /**
  * Agrega lo que falte de la carga inicial sin pisar nada que ya exista,
@@ -43,6 +46,7 @@ export async function ensureSeed(database: EntrenoDB = db): Promise<void> {
     [database.exercises, database.routines, database.sessions, database.meta],
     async () => {
       await addMissing(database.exercises, EXERCISES);
+      await mergeVariants(database, EXERCISES);
       await addMissing(database.routines, ROUTINES);
       await addMissing(database.sessions, HISTORY);
       if (!(await database.meta.get('weekPlan'))) {
@@ -59,9 +63,24 @@ async function addMissing<T extends { id: string }>(table: Table<T, string>, row
   if (missing.length) await table.bulkAdd(missing);
 }
 
+/** Suma variantes nuevas de la carga inicial sin quitar las que ya existen. */
+async function mergeVariants(database: EntrenoDB, seed: Exercise[]) {
+  for (const e of seed) {
+    if (!e.variants?.length) continue;
+    const current = await database.exercises.get(e.id);
+    if (!current) continue;
+    const merged = [...new Set([...(current.variants ?? []), ...e.variants])];
+    if (merged.length !== (current.variants ?? []).length) await database.exercises.update(e.id, { variants: merged });
+  }
+}
+
 export async function getWeekPlan(database: EntrenoDB = db): Promise<DayPlan[]> {
   const entry = await database.meta.get('weekPlan');
   return (entry?.value as DayPlan[] | undefined) ?? WEEK_PLAN;
+}
+
+export async function setWeekPlan(plan: DayPlan[]): Promise<void> {
+  await db.meta.put({ key: 'weekPlan', value: plan });
 }
 
 export async function updateDayState(date: string, patch: Partial<Omit<DayState, 'date'>>): Promise<void> {
