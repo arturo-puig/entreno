@@ -4,9 +4,11 @@ import { App } from './App';
 import { ensureSeed } from './db/db';
 import { closeStaleSessions } from './db/actions';
 import { toISODate } from './domain/dates';
+import { setupPwa } from './pwa';
 import './styles/app.css';
 
 const root = createRoot(document.getElementById('root')!);
+setupPwa();
 
 ensureSeed()
   .then(() => closeStaleSessions(toISODate(new Date())))

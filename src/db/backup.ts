@@ -32,3 +32,78 @@ export async function downloadExport(): Promise<void> {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
   await db.meta.put({ key: 'lastExportAt', value: data.exportedAt });
 }
+
+// ——— Importar una copia ———
+
+type Tables = Awaited<ReturnType<typeof buildExport>>['tables'];
+export type BackupData = Awaited<ReturnType<typeof buildExport>>;
+
+export interface BackupCheck {
+  ok: true;
+  data: BackupData;
+  counts: { routines: number; exercises: number; sessions: number };
+}
+
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+const allHave = (rows: unknown, keys: string[]) => Array.isArray(rows) && rows.every((r) => isObj(r) && keys.every((k) => k in r));
+
+/** Revisa que el archivo sea una copia de esta app antes de tocar nada. */
+export function validateBackup(raw: unknown): BackupCheck | { ok: false; error: string } {
+  if (!isObj(raw) || raw.app !== 'entreno') return { ok: false, error: 'El archivo no es una copia de Entreno.' };
+  if (typeof raw.formatVersion !== 'number' || raw.formatVersion > EXPORT_FORMAT_VERSION) {
+    return { ok: false, error: 'La copia es de una versión más nueva de la app. Actualizá la app y probá de nuevo.' };
+  }
+  const t = raw.tables;
+  if (!isObj(t)) return { ok: false, error: 'La copia está incompleta.' };
+  const ok =
+    allHave(t.exercises, ['id', 'name']) &&
+    allHave(t.routines, ['id', 'name', 'items']) &&
+    allHave(t.sessions, ['id', 'items', 'status']) &&
+    allHave(t.days, ['date']) &&
+    allHave(t.meta, ['key']);
+  if (!ok) return { ok: false, error: 'La copia está dañada o incompleta: no se importó nada.' };
+  const data = raw as unknown as BackupData;
+  return {
+    ok: true,
+    data,
+    counts: { routines: data.tables.routines.length, exercises: data.tables.exercises.length, sessions: data.tables.sessions.length },
+  };
+}
+
+/** Reemplaza todos los datos por los de la copia. Tus videos y fotos no se tocan. */
+export async function replaceAllData(data: BackupData, database = db): Promise<void> {
+  const t: Tables = data.tables;
+  await database.transaction('rw', [database.exercises, database.routines, database.sessions, database.days, database.meta], async () => {
+    await Promise.all([database.exercises.clear(), database.routines.clear(), database.sessions.clear(), database.days.clear(), database.meta.clear()]);
+    await database.exercises.bulkPut(t.exercises);
+    await database.routines.bulkPut(t.routines);
+    await database.sessions.bulkPut(t.sessions);
+    await database.days.bulkPut(t.days);
+    await database.meta.bulkPut(t.meta);
+  });
+}
+
+/** Borra la base entera (incluidos videos y fotos). Al recargar, la app vuelve a como vino. */
+export async function deleteAllData(): Promise<void> {
+  await db.delete();
+}
+
+// ——— Recordatorio de copia ———
+
+const DAY = 86_400_000;
+
+/**
+ * Recordar la copia si ya registraste sesiones y nunca exportaste o pasó más de una semana.
+ * Devuelve los días desde la última copia (Infinity si nunca), o null si no hace falta recordar.
+ */
+export function backupReminder(params: { hasSessions: boolean; lastExportAt?: string; snoozedUntil?: string; now: Date }): number | null {
+  const { hasSessions, lastExportAt, snoozedUntil, now } = params;
+  if (!hasSessions) return null;
+  if (snoozedUntil && new Date(snoozedUntil) > now) return null;
+  const days = lastExportAt ? Math.floor((now.getTime() - new Date(lastExportAt).getTime()) / DAY) : Infinity;
+  return days >= 7 ? days : null;
+}
+
+export async function snoozeBackupReminder(days = 3): Promise<void> {
+  await db.meta.put({ key: 'backupSnoozedUntil', value: new Date(Date.now() + days * DAY).toISOString() });
+}

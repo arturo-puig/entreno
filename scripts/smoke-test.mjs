@@ -381,6 +381,7 @@ try {
     await shot(page, '21-sesion-terminar');
     await page.getByRole('dialog').getByRole('button', { name: 'Terminar' }).click();
     check('terminar: vuelve a Hoy como incompleta (igual suma)', await has(page, 'Igual suma', 'Ver sesión', '1 de 5 sesiones'));
+    check('recordatorio de copia: aparece después de registrar', await has(page, 'Todavía no hiciste ninguna copia', 'Exportar ahora'));
     await shot(page, '22-hoy-sesion-hecha');
 
     await page.getByRole('link', { name: 'Progreso' }).click();
@@ -412,6 +413,73 @@ try {
     check('sesión olvidada abierta: se cierra sola como incompleta', (await has(page, 'Rutina A')) && !(await page.getByText('En curso').count()));
 
     check('etapa 4: sin errores en consola', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+
+  // ——— Etapa 5: instalable, sin conexión, importar y borrar ———
+  {
+    const { context, page, errors } = await openAt('2026-11-04T08:00:00-03:00');
+    const manifest = await page.evaluate(async () => (await fetch('./manifest.webmanifest')).json());
+    check('manifiesto: nombre, inicio y modo app', manifest.name === 'Entreno' && manifest.display === 'standalone' && manifest.start_url === './#/hoy');
+    const iconStatus = await page.evaluate(async (list) => Promise.all(list.map(async (i) => (await fetch(i.src)).status)), manifest.icons);
+    check('manifiesto: íconos 192, 512 y maskable', iconStatus.every((st) => st === 200) && manifest.icons.some((i) => i.purpose === 'maskable'), iconStatus.join(','));
+    const controlled = await page
+      .waitForFunction(() => navigator.serviceWorker && navigator.serviceWorker.controller !== null, null, { timeout: 15000 })
+      .then(() => true, () => false);
+    check('sin conexión: service worker activo', controlled);
+    await page.goto(`${BASE}#/ajustes`);
+    check('ajustes: informa que está lista sin conexión', await has(page, 'Sin conexión: lista'));
+
+    await context.setOffline(true);
+    await page.goto(`${BASE}#/hoy`);
+    await page.reload();
+    await page.getByRole('navigation', { name: 'Secciones' }).waitFor({ timeout: 10000 }).catch(() => {});
+    check('sin conexión: la app abre sin señal', await has(page, 'Miércoles', 'Cardio y movilidad'));
+    await page.goto(`${BASE}#/ejercicios/sentadilla-smith`);
+    const offImg = page.locator('.media-illustration img.is-visible');
+    await offImg.waitFor({ timeout: 5000 }).catch(() => {});
+    check('sin conexión: las ilustraciones se ven', await offImg.evaluate((el) => el.complete && el.naturalWidth > 0).catch(() => false));
+    await shot(page, '23-sin-conexion');
+    await context.setOffline(false);
+
+    // Exportar, borrar una rutina e importar la copia.
+    await page.goto(`${BASE}#/ajustes`);
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /Exportar datos/ }).click()]);
+    const backup = readFileSync(await dl.path());
+    await page.goto(`${BASE}#/rutinas/rutina-b`);
+    await has(page, 'Peso muerto unilateral');
+    await page.getByRole('button', { name: 'Eliminar rutina' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Eliminar' }).click();
+    check('eliminar rutina: el sábado pasa a descanso', (await has(page, 'Tu semana')) && (await page.locator('li', { hasText: 'SÁB' }).innerText()).includes('Descanso'));
+
+    await page.goto(`${BASE}#/ajustes`);
+    const fileInput = page.locator('input[type=file]');
+    await fileInput.setInputFiles({ name: 'otra.json', mimeType: 'application/json', buffer: Buffer.from('{"hola":1}') });
+    check('importar: rechaza un archivo que no es una copia', await has(page, 'no es una copia de Entreno'));
+    await fileInput.setInputFiles({ name: 'copia.json', mimeType: 'application/json', buffer: backup });
+    check('importar: muestra qué trae la copia', await has(page, '5 rutinas'));
+    await shot(page, '24-importar');
+    const [safety] = await Promise.all([
+      page.waitForEvent('download', { timeout: 5000 }).catch(() => null),
+      page.getByRole('dialog').getByRole('button', { name: 'Reemplazar' }).click(),
+    ]);
+    check('importar: antes descarga una copia de lo actual', !!safety);
+    check('importar: avisa que terminó', await has(page, 'Copia importada'));
+    await page.goto(`${BASE}#/rutinas`);
+    check('importar: vuelve la Rutina B', (await has(page, 'Tu semana')) && (await page.locator('li', { hasText: 'SÁB' }).innerText()).includes('Rutina B'));
+
+    // Borrar todo con confirmación escrita.
+    await page.goto(`${BASE}#/ajustes`);
+    await page.getByRole('button', { name: 'Borrar todos los datos' }).click();
+    const dialog = page.getByRole('dialog');
+    check('borrar todo: pide escribir «borrar»', await dialog.getByRole('button', { name: 'Borrar todo' }).isDisabled());
+    await dialog.getByLabel('Escribí «borrar» para confirmar').fill('borrar');
+    await dialog.getByRole('button', { name: 'Borrar todo' }).click();
+    await page.getByRole('navigation', { name: 'Secciones' }).waitFor({ timeout: 10000 });
+    await page.goto(`${BASE}#/ajustes`);
+    check('borrar todo: la app vuelve a como vino', await has(page, 'Todavía no hiciste ninguna copia'));
+
+    check('etapa 5: sin errores en consola', errors.length === 0, errors.join(' | '));
     await context.close();
   }
 

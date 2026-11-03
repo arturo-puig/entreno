@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, getWeekPlan, updateDayState } from '../db/db';
 import { startSession } from '../db/actions';
+import { backupReminder, downloadExport, snoozeBackupReminder } from '../db/backup';
+import { applyUpdate, usePwa } from '../pwa';
 import type { Readiness, Routine, Session } from '../db/types';
 import { addDays, capitalize, dayAndMonth, startOfWeek, toISODate, weekdayLetter, weekdayName, parseISODate } from '../domain/dates';
 import { estimateRoutineMinutes } from '../domain/estimate';
@@ -21,21 +23,31 @@ export function Today() {
   const now = useNow();
   const iso = toISODate(now);
   const [picking, setPicking] = useState(false);
+  const pwa = usePwa();
 
   const data = useLiveQuery(async () => {
     const monday = startOfWeek(now);
-    const [weekPlan, routines, day, sessions, exercises] = await Promise.all([
+    const [weekPlan, routines, day, sessions, exercises, logged, lastExport, snoozed] = await Promise.all([
       getWeekPlan(),
       db.routines.toArray(),
       db.days.get(iso),
       db.sessions.where('date').between(toISODate(monday), toISODate(addDays(monday, 6)), true, true).toArray(),
       db.exercises.toArray(),
+      db.sessions.where('source').equals('registro').count(),
+      db.meta.get('lastExportAt'),
+      db.meta.get('backupSnoozedUntil'),
     ]);
-    return { weekPlan, routines, day, sessions, exercises };
+    const backupDays = backupReminder({
+      hasSessions: logged > 0,
+      lastExportAt: lastExport?.value as string | undefined,
+      snoozedUntil: snoozed?.value as string | undefined,
+      now: new Date(),
+    });
+    return { weekPlan, routines, day, sessions, exercises, backupDays };
   }, [iso]);
 
   if (!data) return <Loading />;
-  const { weekPlan, routines, day, sessions, exercises } = data;
+  const { weekPlan, routines, day, sessions, exercises, backupDays } = data;
 
   const plan = planFor(weekPlan, now);
   const routine = routines.find((r) => r.id === effectiveRoutineId(plan, day));
@@ -63,6 +75,20 @@ export function Today() {
         <h1>{capitalize(weekdayName(now))}</h1>
         <p className="today-date">{dayAndMonth(now)}</p>
       </header>
+
+      {pwa.updateReady && (
+        <div className="notice notice-accent">
+          <Icon name="download" size={20} />
+          <div>
+            <p>Hay una versión nueva de la app.</p>
+            <div className="notice-actions">
+              <button className="btn btn-sm btn-primary" onClick={applyUpdate}>
+                Actualizar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {otherOpen && (
         <div className="notice notice-accent">
@@ -136,6 +162,27 @@ export function Today() {
       </div>
 
       <WeekStrip week={week} />
+
+      {backupDays !== null && (
+        <div className="notice notice-warn backup-reminder">
+          <Icon name="download" size={18} />
+          <div>
+            <strong>Copia de seguridad</strong>
+            <p>
+              Tus datos están solo en este celular.{' '}
+              {backupDays === Infinity ? 'Todavía no hiciste ninguna copia.' : `Hace ${backupDays} días que no hacés una copia.`}
+            </p>
+            <div className="notice-actions">
+              <button className="btn btn-sm" onClick={() => downloadExport()}>
+                Exportar ahora
+              </button>
+              <button className="btn btn-sm btn-ghost" onClick={() => snoozeBackupReminder()}>
+                Más tarde
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {picking && (
         <Sheet title="¿Qué querés hacer hoy?" onClose={() => setPicking(false)}>

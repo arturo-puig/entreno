@@ -27,7 +27,8 @@ npm run build        # tsc + vite build → dist/
 npm run smoke        # Playwright: prueba de punta a punta a 360×800 (necesita build y el paquete playwright)
 ```
 
-Despliegue: `.github/workflows/deploy.yml` publica en GitHub Pages en cada push a `main`.
+Despliegue: `.github/workflows/deploy.yml` publica en GitHub Pages en cada push a `main`. Trabajar en una rama `etapa-N` y pasar a `main` (fast-forward) al cerrar la etapa con todas las pruebas en verde.
+`vite.config.ts` no está en el `include` de tsconfig (usa APIs de Node y no hay @types/node).
 
 ## Estructura
 
@@ -44,7 +45,7 @@ Despliegue: `.github/workflows/deploy.yml` publica en GitHub Pages en cada push 
 2. ✅ Estructura visual, navegación de 5 secciones, base de datos local, carga inicial, pantalla Hoy (estado previo, versión corta, elegir otra rutina, sugerencia sin deuda, semana), Rutinas y biblioteca de solo lectura, exportar JSON.
 3. ✅ Edición: rutinas (series y tipo de objetivo, descansos, notación, pendientes → confirmado, reordenar, agregar/quitar, versión corta, versión y «volver a la original»), duplicar/crear/eliminar rutinas, semana editable, histórico → rutina alternativa, editor y alta de ejercicios. Medios adelantados: 18 ilustraciones Everkinetic (CC BY-SA 4.0) animadas alternando las dos posiciones, videos/fotos propios por ejercicio y variante (tabla `userMedia`, Dexie v2), búsqueda en YouTube como complemento externo rotulado.
 4. ✅ Entrenamiento activo (`src/screens/Session.tsx`, lógica en `src/domain/session.ts`): sesión creada desde Hoy (copia el plan), teclado numérico propio (nunca el del celular), valores sugeridos en gris = carga de la vez anterior + objetivo del plan («lo que ves es lo que se registra» al tocar ✓; si el plan es un rango y no hay número, pregunta), descanso automático por hora de fin con vibración/sonido y pantalla encendida (Wake Lock), cuenta regresiva para ejercicios por tiempo, anterior/siguiente/lista, omitir y sustituir (solo en la sesión), series extra, RPE por serie opcional (Ajustes), esfuerzo de la sesión opcional, sesiones incompletas que igual suman, cierre automático de sesiones olvidadas de otro día, sugerencia de progresión solo con rangos y sesiones reales. Progreso lista las sesiones.
-5. ⏳ PWA instalable + offline (vite-plugin-pwa), importar copia, borrar datos con confirmación. (Los medios ya se hicieron en la etapa 3.)
+5. ✅ PWA instalable y sin conexión con service worker propio (sin dependencias): `pwa/sw.template.js` + plugin en `vite.config.ts` que genera `dist/sw.js` con la lista exacta de archivos y una versión por hash. Caché primero (abre al instante con o sin señal), `ignoreVary` (si no, los módulos no coinciden), actualización solo cuando el usuario toca «Actualizar» (`src/pwa.ts`). Manifiesto + íconos (`scripts/make-icons.py`). Importar copia con validación y descarga automática de lo actual antes de reemplazar (`src/db/backup.ts`), borrar todo escribiendo «borrar», recordatorio semanal de copia en Hoy.
 6. ⏳ Progreso (constancia semanal, cargas por ejercicio, peso y cintura con promedio semanal), pulido.
 7. ⏳ Asistente v0 (aprobado, después de la etapa 4): capa sobre la app, no reemplazo; las series se registran a toques. Barra «Pedile algo…» en Hoy, ~12 intenciones, comprensión con reglas locales (sin modelos pagos), fichas de tareas con efecto declarado (consulta / registro con eco / acto con confirmación), «Continuar con:», registro local de pedidos con útil/no útil y sinónimos enseñados por el usuario. Medición con un banco de 40–50 frases escrito por el usuario antes de programar. Las acciones de `src/db/actions.ts` son la base de esas fichas.
 Después: copia en Google Drive (v1.1), comidas (v2), Strava / Health Connect (v3).
