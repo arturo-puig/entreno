@@ -2,10 +2,20 @@ import { useState } from 'react';
 import { logActivity } from '../db/actions';
 import { addDays, toISODate } from '../domain/dates';
 import { ACTIVITIES } from '../domain/stats';
-import { Field, parseNumber, Sheet } from './common';
+import { Field, parseNumber, Sheet, Switch } from './common';
 
 /** Registrar pádel, bici, caminata o trote en un toque. Todo es opcional salvo el tipo. */
-export function ActivitySheet({ today, initial, onClose }: { today: Date; initial?: string; onClose: () => void }) {
+const CARDIO_LIKE = ['caminata', 'bicicleta-exterior', 'trote'];
+
+export function ActivitySheet(props: {
+  today: Date;
+  initial?: string;
+  onClose: () => void;
+  /** El día toca una rutina de cardio: la actividad puede contar como esa sesión. */
+  cardioRoutine?: { routineId: string; name: string };
+  onSaved?: (summary: string) => void;
+}) {
+  const { today, initial, onClose, cardioRoutine } = props;
   const [type, setType] = useState<string>(initial ?? ACTIVITIES[0].exerciseId);
   const [when, setWhen] = useState<'hoy' | 'ayer'>('hoy');
   const [minutes, setMinutes] = useState('');
@@ -13,19 +23,26 @@ export function ActivitySheet({ today, initial, onClose }: { today: Date; initia
   const [effort, setEffort] = useState<number>();
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const [countAs, setCountAs] = useState(true);
   const activity = ACTIVITIES.find((a) => a.exerciseId === type)!;
+  const canCount = !!cardioRoutine && CARDIO_LIKE.includes(type) && when === 'hoy';
 
   const save = async () => {
     setBusy(true);
+    const m = parseNumber(minutes);
+    const k = parseNumber(km);
     await logActivity({
       exerciseId: type,
       name: activity.label,
       date: toISODate(when === 'hoy' ? today : addDays(today, -1)),
-      minutes: parseNumber(minutes),
-      km: parseNumber(km),
+      minutes: m,
+      km: k,
       effort,
       note,
+      countAs: canCount && countAs ? cardioRoutine : undefined,
     });
+    const detail = [m !== undefined ? `${m} min` : '', k !== undefined ? `${String(k).replace('.', ',')} km` : ''].filter(Boolean).join(' · ');
+    props.onSaved?.(`${activity.label.toLowerCase()}${detail ? ` · ${detail}` : ''}${canCount && countAs ? ` como ${cardioRoutine!.name}` : ''}`);
     onClose();
   };
 
@@ -59,6 +76,14 @@ export function ActivitySheet({ today, initial, onClose }: { today: Date; initia
           Ayer
         </button>
       </div>
+      {canCount && (
+        <Switch
+          checked={countAs}
+          onChange={setCountAs}
+          label={`Cuenta como ${cardioRoutine!.name} de hoy`}
+          description="Suma como la sesión planificada del día, no como actividad aparte."
+        />
+      )}
       <div className="form-row">
         <Field label="Minutos">
           <input className="input input-num" inputMode="decimal" value={minutes} onChange={(e) => setMinutes(e.target.value)} placeholder="—" />

@@ -60,5 +60,7 @@ export function formatLoggedSet(s: LoggedSet): string {
   else if (s.weightKg !== undefined) parts.push(formatKg(s.weightKg));
   if (s.durationSec !== undefined) parts.push(formatDuration(s.durationSec));
   if (s.distanceKm !== undefined) parts.push(`${kgFormat.format(s.distanceKm)} km`);
+  if (s.speedKmh !== undefined) parts.push(`${kgFormat.format(s.speedKmh)} km/h`);
+  if (s.inclinePct !== undefined) parts.push(`${kgFormat.format(s.inclinePct)} %`);
   return parts.join(' · ') || '—';
 }

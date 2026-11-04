@@ -278,7 +278,7 @@ try {
     await page.getByRole('button', { name: 'Cambiar días' }).click();
     await page.getByRole('button', { name: 'Cambiar domingo' }).click();
     await page.getByRole('dialog').getByRole('button', { name: /Cardio y movilidad/ }).click();
-    await page.getByRole('button', { name: 'Listo' }).click();
+    await page.getByRole('button', { name: 'Listo' }).click(); // «Listo» de editar la semana
     check('semana: el domingo pasa a Cardio y movilidad', (await page.locator('li', { hasText: 'DOM' }).innerText()).includes('Cardio y movilidad'));
 
     // Registro histórico → rutina alternativa.
@@ -320,6 +320,7 @@ try {
 
     await page.getByRole('button', { name: 'Comenzar' }).click();
     check('sesión: arranca en el primer ejercicio', await has(page, 'Ejercicio 1 de 5', 'Jalón al pecho', 'Plan', '3 × 8–12'));
+    check('coach: anuncia el arranque', await has(page, 'Arrancamos: 5 ejercicios. Primero, Jalón al pecho.'));
     check('sesión: sin barra de navegación', (await page.getByRole('navigation', { name: 'Secciones' }).count()) === 0);
     check('sesión: usa el histórico como referencia', await has(page, 'tu registro histórico'));
     check('sesión: sugiere 45 kg y muestra el rango del plan', (await set(1).innerText()).includes('45 kg') && (await set(1).innerText()).includes('8–12'));
@@ -336,6 +337,7 @@ try {
     await pad.getByRole('button', { name: 'Listo' }).click();
     await set(1).getByRole('button', { name: /marcar como hecha/ }).click();
     check('serie 1: guarda lo escrito', (await set(1).innerText()).includes('47,5 kg') && (await set(1).innerText()).includes('10'));
+    check('coach: compara con la vez anterior y dice qué sigue', await has(page, 'Más carga que la vez anterior (45 kg). Descansá. Después: serie 2 de 3.'));
     await has(page, 'Descanso');
     const restText = await page.locator('.timer-label strong').innerText();
     check('descanso: arranca solo con 1:30', /^1:(30|29|28)$/.test(restText), restText);
@@ -380,6 +382,9 @@ try {
     await page.getByRole('dialog').getByRole('button', { name: '7', exact: true }).click();
     await shot(page, '21-sesion-terminar');
     await page.getByRole('dialog').getByRole('button', { name: 'Terminar' }).click();
+    check('festejo: «¡Bien hecho!» con el resumen', await has(page, '¡Bien hecho!', 'Hiciste 1 de 5 ejercicios', 'Esta semana: 1 de 5 sesiones'));
+    await shot(page, '29-festejo');
+    await page.getByRole('dialog', { name: '¡Bien hecho!' }).getByRole('button', { name: 'Listo' }).click();
     check('terminar: vuelve a Hoy como incompleta (igual suma)', await has(page, 'Igual suma', 'Ver sesión', '1 de 5 sesiones'));
     check('recordatorio de copia: aparece después de registrar', await has(page, 'Todavía no hiciste ninguna copia', 'Exportar ahora'));
     await shot(page, '22-hoy-sesion-hecha');
@@ -568,6 +573,9 @@ try {
     };
     const lastBot = () => page.locator('.bubble-bot').last();
 
+    await page.getByRole('button', { name: 'Estoy cansado' }).click();
+    check('hoy → asistente: la sugerencia llega ya preguntada', await has(page, 'repetí las cargas de la última vez'));
+    await page.getByRole('button', { name: 'Volver a Hoy' }).click();
     await page.getByRole('button', { name: /Pedile algo/ }).click();
     check('asistente: abre con saludo y ejemplos', await has(page, 'nunca invento números', 'Continuar con:'));
     check('asistente: sin barra de navegación', (await page.getByRole('navigation', { name: 'Secciones' }).count()) === 0);
@@ -617,10 +625,57 @@ try {
     await context.close();
   }
 
+  // ——— Interactividad: cardio acompañado y actividad que cuenta como sesión ———
+  {
+    const { context, page, errors } = await openAt('2026-11-04T08:00:00-03:00', { flowingClock: true }); // miércoles
+    await page.getByRole('button', { name: 'Comenzar' }).click();
+    await page.locator('.cardio-ring').waitFor();
+    check('cardio: el coach explica el ritmo', await has(page, 'tenés que poder hablar en frases completas'));
+    await page.getByRole('button', { name: /Empezar/ }).click();
+    await page.getByRole('button', { name: /Pausar/ }).waitFor();
+    await page.clock.fastForward(15 * 60_000);
+    check('cardio: aviso de mitad de camino', await has(page, '¡Mitad del camino! Quedan 15 min.'));
+    await shot(page, '30-cardio-anillo');
+    await page.getByRole('button', { name: /Pausar/ }).click();
+    check('cardio: pausa', await has(page, 'En pausa'));
+    await page.clock.fastForward(5 * 60_000);
+    await page.getByRole('button', { name: /Seguir/ }).click();
+    await page.getByRole('button', { name: /Pausar/ }).waitFor();
+    await page.clock.fastForward(16 * 60_000);
+    check('cardio: llega a la meta (la pausa no cuenta)', await has(page, '¡Llegaste a 30 min! Podés seguir hasta 35 o terminar.'));
+    await page.locator('.cardio-actions').getByRole('button', { name: 'Terminar' }).click();
+    check('cardio: guarda el tiempo real', await has(page, 'Listo · 31 min'));
+    await page.locator('.cardio-fields').getByRole('button', { name: /Distancia/ }).click();
+    for (const k of ['3', ',', '4']) await page.getByRole('group', { name: 'Teclado numérico' }).getByRole('button', { name: k, exact: true }).click();
+    await page.getByRole('group', { name: 'Teclado numérico' }).getByRole('button', { name: 'Listo' }).click();
+    check('cardio: distancia opcional', await has(page, '3,4 km'));
+    await page.locator('.session-bar').getByRole('button', { name: 'Terminar' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Terminar' }).click();
+    check('festejo: sesión completa', await has(page, '¡Bien hecho!', 'Completaste Cardio y movilidad.'));
+    await page.getByRole('dialog', { name: '¡Bien hecho!' }).getByRole('button', { name: 'Listo' }).click();
+    check('hoy: el asistente festeja que ya entrenaste', await has(page, '¡Hoy ya entrenaste: Cardio y movilidad completa!'));
+    check('interactividad: sin errores en consola', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+  {
+    const { context, page, errors } = await openAt('2026-11-04T09:30:00-03:00'); // miércoles, sin usar la sesión
+    await page.getByRole('button', { name: /Registrar actividad/ }).click();
+    const sheet = page.getByRole('dialog', { name: 'Registrar actividad' });
+    await sheet.getByRole('button', { name: 'Caminata' }).click();
+    check('actividad en día de cardio: ofrece contar como la sesión', await sheet.getByRole('switch', { name: /Cuenta como Cardio y movilidad de hoy/ }).isChecked());
+    await sheet.getByLabel('Minutos').fill('30');
+    await sheet.getByRole('button', { name: 'Guardar' }).click();
+    check('actividad: festejo chico', await has(page, '¡Bien!') || (await page.getByText('Anotaste caminata · 30 min como Cardio y movilidad').count()) > 0);
+    check('actividad: cuenta como la sesión del día', await has(page, '¡Sesión hecha!', '1 de 5 sesiones'));
+    check('actividad: sin errores en consola', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+
   // ——— Martes sin haber hecho la A: sugerencia sin deuda ———
   {
     const { context, page, errors } = await openAt('2026-10-27T08:00:00-03:00');
     check('martes: Tren superior complementaria', await has(page, 'Tren superior', 'complementaria'));
+    check('hoy: el asistente saluda con lo que toca', await has(page, 'Buen día. Hoy toca Tren superior: 5 ejercicios, ≈ 30 min.'));
     check('martes: sugiere hacer la Rutina A', await has(page, 'todavía no hiciste la'));
     await shot(page, '09-hoy-martes-sugerencia');
     await page.getByRole('button', { name: 'Hacer Rutina A hoy' }).click();
@@ -644,7 +699,7 @@ try {
     check('muy fatigado: recomendación prudente y opción corta', await has(page, 'consultá con un profesional', 'Usar versión corta'));
     await page.getByRole('button', { name: 'Comenzar' }).click();
     await page.locator('.session-top').waitFor();
-    check('cardio: «Cómo se hace» cerrado y con cuenta regresiva', (await page.locator('.how').count()) === 0 && (await page.getByRole('button', { name: /Iniciar 30 min/ }).count()) === 1);
+    check('cardio: «Cómo se hace» cerrado y anillo con «Empezar»', (await page.locator('.how').count()) === 0 && (await page.getByRole('button', { name: /Empezar/ }).count()) === 1);
     await page.getByRole('button', { name: 'Volver' }).or(page.getByRole('button', { name: /Salir/ })).first().click();
     await page.getByRole('navigation', { name: 'Secciones' }).waitFor();
     await context.close();

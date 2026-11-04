@@ -100,3 +100,12 @@ describe('ejes', () => {
     expect(niceTicks(45, 45)).toEqual([42, 44, 46, 48]); // un solo valor: eje alrededor de él
   });
 });
+
+describe('actividad que cuenta como la sesión del día', () => {
+  it('queda como sesión de la rutina de cardio (suma al plan, no como actividad suelta)', () => {
+    const a = createActivity({ exerciseId: 'caminata', name: 'Caminata', date: '2026-11-04', minutes: 32, countAs: { routineId: 'cardio-movilidad', name: 'Cardio y movilidad' } });
+    expect(a).toMatchObject({ kind: 'entrenamiento', routineId: 'cardio-movilidad', name: 'Cardio y movilidad', status: 'completa' });
+    const w = weekStats([a], WEEK_PLAN, TODAY, 1)[0];
+    expect(w).toMatchObject({ gym: 1, activities: 0 });
+  });
+});

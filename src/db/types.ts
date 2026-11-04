@@ -151,6 +151,21 @@ export interface LoggedSet {
   /** Objetivo de esta serie al momento de entrenar (copia del plan). */
   planned?: PlannedSet;
   completedAt?: string;
+  /** Cardio en cinta o bici: opcionales. */
+  speedKmh?: number;
+  inclinePct?: number;
+}
+
+/** Temporizador de trabajo guardado en la sesión (sobrevive a recargas). */
+export interface WorkTimer {
+  itemId: string;
+  setIndex: number;
+  startedAt: string;
+  /** Objetivo: cuenta regresiva (planchas) o meta del cronómetro (cardio). */
+  durationSec: number;
+  mode: 'cuenta-regresiva' | 'cronometro';
+  pausedAt?: string;
+  pausedMs: number;
 }
 
 export interface SessionItem {
@@ -190,6 +205,7 @@ export interface Session {
   currentIndex?: number;
   /** Fin del descanso en curso (hora absoluta: no se desfasa si la pantalla se apaga). */
   restEndsAt?: string;
+  work?: WorkTimer;
 }
 
 /** Peso corporal y cintura (opcional). Un registro por día. */

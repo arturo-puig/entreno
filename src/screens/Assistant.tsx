@@ -8,6 +8,7 @@ import { toISODate } from '../domain/dates';
 import { navigate, switchTab } from '../router';
 import { Icon } from '../ui/Icon';
 import { Loading } from '../ui/common';
+import { Avatar } from '../ui/Coach';
 import { useNow } from '../ui/useNow';
 
 type Message =
@@ -33,7 +34,7 @@ const GREETING: Reply = {
   ],
 };
 
-export function AssistantScreen() {
+export function AssistantScreen({ initial }: { initial?: string }) {
   const now = useNow();
   const iso = toISODate(now);
   const data = useLiveQuery(async () => {
@@ -52,10 +53,18 @@ export function AssistantScreen() {
   const [messages, setMessages] = useState<Message[]>([{ id: nextId(), role: 'assistant', reply: GREETING }]);
   const [text, setText] = useState('');
   const endRef = useRef<HTMLDivElement>(null);
+  const sentInitial = useRef(false);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
   }, [messages.length]);
+
+  // Si llegaste desde una sugerencia de Hoy, la pregunta ya va enviada.
+  useEffect(() => {
+    if (!data || !initial || sentInitial.current) return;
+    sentInitial.current = true;
+    send(initial);
+  }, [data, initial]);
 
   if (!data) return <Loading />;
 
@@ -147,7 +156,10 @@ export function AssistantScreen() {
             </p>
           ) : (
             <div key={m.id} className="bubble bubble-bot">
-              <p className="bot-text">{m.reply.text}</p>
+              <div className="bot-head">
+                <Avatar size={28} />
+                <p className="bot-text">{m.reply.text}</p>
+              </div>
               {m.reply.lines && (
                 <ul className="bot-lines">
                   {m.reply.lines.map((l, i) => (

@@ -19,6 +19,9 @@ import { ActivitySheet } from '../ui/ActivitySheet';
 import { formatLoggedSet } from '../domain/format';
 import { isActivity } from '../domain/stats';
 import { useNow } from '../ui/useNow';
+import { CoachBubble } from '../ui/Coach';
+import { Celebration } from '../ui/Celebration';
+import { todayLine } from '../domain/coach';
 
 const LIGHT_ROUTINE_ID = 'cardio-movilidad';
 
@@ -27,6 +30,7 @@ export function Today() {
   const iso = toISODate(now);
   const [picking, setPicking] = useState(false);
   const [logging, setLogging] = useState<string | null>(null);
+  const [cheer, setCheer] = useState<string | null>(null);
   const pwa = usePwa();
 
   const data = useLiveQuery(async () => {
@@ -70,6 +74,34 @@ export function Today() {
   // Actividad sugerida según el día: pádel el viernes, caminata el domingo.
   const suggestedActivity = plan.type === 'actividad' && /p[aá]del/i.test(plan.label) ? 'padel' : plan.type === 'descanso' ? 'caminata' : undefined;
 
+  // El asistente te recibe: qué toca, qué está en curso o qué ya hiciste.
+  const coachMode: Mode = day?.short && routine && hasShortVersion(routine) ? 'corta' : 'completa';
+  const coach = todayLine({
+    now,
+    planType: plan.type,
+    planLabel: plan.label,
+    routineName: routine?.name,
+    exerciseCount: routine ? itemsForMode(routine, coachMode).length : undefined,
+    minutes: routine ? estimateRoutineMinutes(routine, coachMode) : undefined,
+    session: routineSession,
+    activitiesToday: todaysActivities.map((a) => a.name),
+  });
+  const ask = (text: string) => navigate(`/asistente/${encodeURIComponent(text)}`);
+  const coachChips: { label: string; run: () => void }[] = routineSession
+    ? routineSession.status === 'en-curso'
+      ? []
+      : [{ label: '¿Cómo vengo esta semana?', run: () => ask('¿Cómo vengo esta semana?') }]
+    : routine
+      ? [
+          { label: 'Tengo poco tiempo', run: () => ask('Tengo poco tiempo') },
+          { label: 'Estoy cansado', run: () => ask('Estoy cansado') },
+          { label: '¿Cómo se hace…?', run: () => ask('¿Cómo se hace?') },
+        ]
+      : suggestedActivity && !todaysActivities.length
+        ? [{ label: suggestedActivity === 'padel' ? 'Anotar pádel' : 'Anotar caminata', run: () => setLogging(suggestedActivity) }]
+        : [];
+  const cardioRoutine = routine?.kind === 'cardio' && !routineSession ? { routineId: routine.id, name: routine.name } : undefined;
+
   const choose = async (r: Routine) => {
     await updateDayState(iso, { routineId: r.id === plan.routineId ? undefined : r.id, short: false });
     setPicking(false);
@@ -83,10 +115,23 @@ export function Today() {
         <p className="today-date">{dayAndMonth(now)}</p>
       </header>
 
-      <button className="ask-bar" onClick={() => navigate('/asistente')}>
-        <Icon name="spark" size={20} />
-        <span>Pedile algo… «tengo 20 minutos»</span>
-      </button>
+      <section className="coach-card">
+        <CoachBubble text={coach.text} sub={coach.sub}>
+          {coachChips.length > 0 && (
+            <div className="coach-chips">
+              {coachChips.map((c) => (
+                <button key={c.label} className="chip-btn" onClick={c.run}>
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </CoachBubble>
+        <button className="ask-bar" onClick={() => navigate('/asistente')}>
+          <Icon name="send" size={18} />
+          <span>Pedile algo…</span>
+        </button>
+      </section>
 
       {pwa.updateReady && (
         <div className="notice notice-accent">
@@ -216,7 +261,16 @@ export function Today() {
         </div>
       )}
 
-      {logging && <ActivitySheet today={now} initial={logging} onClose={() => setLogging(null)} />}
+      {logging && (
+        <ActivitySheet
+          today={now}
+          initial={logging}
+          cardioRoutine={cardioRoutine}
+          onClose={() => setLogging(null)}
+          onSaved={(summary) => setCheer(summary)}
+        />
+      )}
+      {cheer && <Celebration compact title="¡Bien!" subtitle={`Anotaste ${cheer}.`} onClose={() => setCheer(null)} />}
 
       {picking && (
         <Sheet title="¿Qué querés hacer hoy?" onClose={() => setPicking(false)}>

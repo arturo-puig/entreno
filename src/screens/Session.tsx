@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db/db';
+import { db, getWeekPlan } from '../db/db';
 import { discardSession, finishSession, getPrefs, updateSession } from '../db/actions';
-import type { Exercise, LoggedSet, Session, SessionItem } from '../db/types';
+import type { Exercise, LoggedSet, Session, SessionItem, WorkTimer } from '../db/types';
 import { capitalize, dayAndMonth, parseISODate, weekdayName } from '../domain/dates';
 import { formatDuration, formatKg, formatLoggedSet, formatRest, summarizeSets } from '../domain/format';
 import { filterExercises, NO_FILTERS } from '../domain/search';
@@ -15,15 +15,19 @@ import { Icon } from '../ui/Icon';
 import { Badge, ConfirmSheet, Loading, NotFound, PendingNote, Sheet } from '../ui/common';
 import { ExerciseMedia } from '../ui/ExerciseMedia';
 import { alertDone, primeAudio, useWakeLock } from '../ui/device';
+import { celebrate, coachLine, workElapsedMs, type CelebrationData } from '../domain/coach';
+import { weekStats } from '../domain/stats';
+import { CoachBubble } from '../ui/Coach';
+import { Celebration } from '../ui/Celebration';
 
-type PadField = FieldKind | 'rpe';
+type PadField = FieldKind | 'rpe' | 'speedKmh' | 'inclinePct';
 interface PadTarget {
   itemId: string;
   setIndex: number;
   field: PadField;
 }
 
-const STEP: Record<PadField, number> = { weightKg: 2.5, reps: 1, durationSec: 15, durationMin: 5, distanceKm: 0.5, rpe: 1 };
+const STEP: Record<PadField, number> = { weightKg: 2.5, reps: 1, durationSec: 15, durationMin: 5, distanceKm: 0.5, rpe: 1, speedKmh: 0.5, inclinePct: 1 };
 const LABEL: Record<PadField, string> = {
   weightKg: 'Peso (kg)',
   reps: 'Repeticiones',
@@ -31,8 +35,12 @@ const LABEL: Record<PadField, string> = {
   durationMin: 'Tiempo (min)',
   distanceKm: 'Distancia (km)',
   rpe: 'Esfuerzo (RPE 1–10)',
+  speedKmh: 'Velocidad (km/h)',
+  inclinePct: 'Inclinación (%)',
 };
-const DECIMALS: Record<PadField, boolean> = { weightKg: true, reps: false, durationSec: false, durationMin: true, distanceKm: true, rpe: false };
+const DECIMALS: Record<PadField, boolean> = {
+  weightKg: true, reps: false, durationSec: false, durationMin: true, distanceKm: true, rpe: false, speedKmh: true, inclinePct: true,
+};
 
 const num = (n: number) => String(Number(n.toFixed(2))).replace('.', ',');
 
@@ -44,7 +52,7 @@ function fieldValue(set: LoggedSet, f: PadField): number | undefined {
 
 function hintValue(h: SetHints, f: PadField): number | undefined {
   if (f === 'durationMin') return h.durationSec !== undefined ? h.durationSec / 60 : undefined;
-  if (f === 'rpe') return undefined;
+  if (f === 'rpe' || f === 'speedKmh' || f === 'inclinePct') return undefined;
   return h[f];
 }
 
@@ -55,13 +63,14 @@ function writeField(set: LoggedSet, f: PadField, v: number | undefined) {
 
 export function SessionScreen({ id }: { id: string }) {
   const data = useLiveQuery(async () => {
-    const [session, exercises, sessions, prefs] = await Promise.all([
+    const [session, exercises, sessions, prefs, weekPlan] = await Promise.all([
       db.sessions.get(id),
       db.exercises.toArray(),
       db.sessions.toArray(),
       getPrefs(),
+      getWeekPlan(),
     ]);
-    return { session: session ?? null, exercises, sessions, prefs };
+    return { session: session ?? null, exercises, sessions, prefs, weekPlan };
   }, [id]);
 
   const session = data?.session;
@@ -74,11 +83,13 @@ export function SessionScreen({ id }: { id: string }) {
   const [pad, setPad] = useState<PadTarget | null>(null);
   const [padText, setPadText] = useState('');
   const [padFresh, setPadFresh] = useState(true);
-  const [work, setWork] = useState<{ itemId: string; setIndex: number; endsAt: number } | null>(null);
   const [restEnded, setRestEnded] = useState(false);
   const [sheet, setSheet] = useState<'lista' | 'sustituir' | 'terminar' | 'descartar' | null>(null);
   const [howOpen, setHowOpen] = useState<Record<string, boolean>>({});
   const notifiedRest = useRef<string | undefined>(undefined);
+  const notifiedWork = useRef<string | undefined>(undefined);
+  const notifiedHalf = useRef<string | undefined>(undefined);
+  const [celebration, setCelebration] = useState<CelebrationData | null>(null);
 
   useEffect(() => {
     const t = window.setInterval(() => setTick((n) => n + 1), 250);
@@ -88,6 +99,9 @@ export function SessionScreen({ id }: { id: string }) {
   const exById = useMemo(() => new Map((data?.exercises ?? []).map((e) => [e.id, e])), [data?.exercises]);
   const restLeft = remainingMs(session?.restEndsAt, now);
   const mutate = (change: (s: Session) => void) => updateSession(id, change);
+  // Temporizador de trabajo guardado en la sesión: sobrevive a recargas y pausas.
+  const work = session?.work;
+  const workMs = work ? workElapsedMs(work, now) : 0;
 
   // Fin del descanso: aviso una sola vez y se limpia.
   useEffect(() => {
@@ -107,14 +121,26 @@ export function SessionScreen({ id }: { id: string }) {
     return () => window.clearTimeout(t);
   }, [restEnded]);
 
-  // Fin de un ejercicio por tiempo (planchas, isométricos).
+  // Planchas e isométricos: al llegar a cero se marca la serie. Cardio: aviso a mitad y al llegar a la meta.
   useEffect(() => {
-    if (!work || now < work.endsAt || !data) return;
-    alertDone(data.prefs);
-    const w = work;
-    setWork(null);
-    markDone(w.itemId, w.setIndex, true);
-  }, [now, work]);
+    if (!work || !data) return;
+    const goal = work.durationSec * 1000;
+    if (work.mode === 'cuenta-regresiva' && workMs >= goal && notifiedWork.current !== work.startedAt) {
+      notifiedWork.current = work.startedAt;
+      alertDone(data.prefs);
+      markDone(work.itemId, work.setIndex, true);
+    }
+    if (work.mode === 'cronometro') {
+      if (workMs >= goal / 2 && notifiedHalf.current !== work.startedAt) {
+        notifiedHalf.current = work.startedAt;
+        if (data.prefs.vibrate) navigator.vibrate?.(120);
+      }
+      if (workMs >= goal && notifiedWork.current !== work.startedAt) {
+        notifiedWork.current = work.startedAt;
+        alertDone(data.prefs);
+      }
+    }
+  }, [workMs, work, data]);
 
   if (!data) return <Loading />;
   if (!session) return <NotFound what="esta sesión" back="/hoy" />;
@@ -167,11 +193,49 @@ export function SessionScreen({ id }: { id: string }) {
       const fresh = s.items.find((x) => x.id === itemId)!;
       completed = completeSet(fresh.sets[setIndex], h);
       fresh.sets[setIndex] = completed;
+      if (s.work?.itemId === itemId && s.work.setIndex === setIndex) s.work = undefined;
     });
     startRest(it, setIndex);
     // Si no hay número para las repeticiones (p. ej. rango 8–12 la primera vez), te lo pregunta.
     const exFields = fieldsFor(exById.get(it.exerciseId), it);
     if (completed && exFields.includes('reps') && completed.reps === undefined) openPad({ itemId, setIndex, field: 'reps' }, completed);
+  }
+
+  // La hora se toma en el momento del toque (no cuando termina de guardarse).
+  function startWork(itemId: string, setIndex: number, durationSec: number, mode: WorkTimer['mode']) {
+    primeAudio();
+    const startedAt = new Date().toISOString();
+    mutate((s) => {
+      s.work = { itemId, setIndex, durationSec, mode, startedAt, pausedMs: 0 };
+    });
+  }
+
+  function pauseWork(pause: boolean) {
+    const at = Date.now();
+    mutate((s) => {
+      if (!s.work) return;
+      if (pause && !s.work.pausedAt) s.work.pausedAt = new Date(at).toISOString();
+      if (!pause && s.work.pausedAt) {
+        s.work.pausedMs += at - new Date(s.work.pausedAt).getTime();
+        s.work.pausedAt = undefined;
+      }
+    });
+  }
+
+  /** Cierra el cardio: con cronómetro guarda el tiempo real; sin cronómetro, el del plan (lo que ves). */
+  function finishCardio(itemId: string) {
+    const elapsedSec = work && work.itemId === itemId ? Math.round(workElapsedMs(work, Date.now()) / 1000) : undefined;
+    mutate((s) => {
+      const it = s.items.find((x) => x.id === itemId)!;
+      const set = it.sets[0];
+      it.sets[0] = {
+        ...set,
+        durationSec: elapsedSec && elapsedSec >= 60 ? elapsedSec : (set.durationSec ?? set.planned?.durationSec),
+        done: true,
+        completedAt: new Date().toISOString(),
+      };
+      if (s.work?.itemId === itemId) s.work = undefined;
+    });
   }
 
   function openPad(target: PadTarget, set?: LoggedSet) {
@@ -222,8 +286,13 @@ export function SessionScreen({ id }: { id: string }) {
   function padNext() {
     if (!pad) return;
     const it = session!.items.find((x) => x.id === pad.itemId)!;
-    const order: PadField[] = [...fieldsFor(exById.get(it.exerciseId), it), ...(data!.prefs.rpe ? (['rpe'] as PadField[]) : [])];
+    const ex = exById.get(it.exerciseId);
+    const order: PadField[] =
+      ex?.movement === 'Cardio'
+        ? ['distanceKm', 'speedKmh', 'inclinePct']
+        : [...fieldsFor(ex, it), ...(data!.prefs.rpe ? (['rpe'] as PadField[]) : [])];
     const pos = order.indexOf(pad.field);
+    if (pos === -1) return setPad(null);
     if (pos < order.length - 1) return openPad({ ...pad, field: order[pos + 1] });
     if (pad.setIndex < it.sets.length - 1) return openPad({ ...pad, setIndex: pad.setIndex + 1, field: order[0] });
     setPad(null);
@@ -257,6 +326,27 @@ export function SessionScreen({ id }: { id: string }) {
           />
         ))}
       </div>
+
+      {(() => {
+        const isCardio = exercise?.movement === 'Cardio';
+        const planned = item.sets[0]?.planned;
+        const text = coachLine({
+          session,
+          index,
+          nameOf: (eid) => exById.get(eid)?.name ?? 'el ejercicio',
+          previous,
+          restLeftMs: restLeft,
+          firstTime,
+          cardio: isCardio
+            ? {
+                elapsedSec: work && work.itemId === item.id ? workMs / 1000 : undefined,
+                targetSec: planned?.durationSec ?? 1800,
+                maxSec: planned?.durationMaxSec,
+              }
+            : undefined,
+        });
+        return active ? <CoachBubble text={text} /> : null;
+      })()}
 
       <section className="ex">
         <h1 className="ex-name">
@@ -310,6 +400,19 @@ export function SessionScreen({ id }: { id: string }) {
             })()}
             <PreviousLine previous={previous} />
 
+            {exercise?.movement === 'Cardio' ? (
+              <CardioPanel
+                item={item}
+                work={work && work.itemId === item.id ? work : undefined}
+                elapsedMs={work && work.itemId === item.id ? workMs : 0}
+                pad={pad}
+                onStart={() => startWork(item.id, 0, item.sets[0]?.planned?.durationSec ?? 1800, 'cronometro')}
+                onPause={(p) => pauseWork(p)}
+                onFinish={() => finishCardio(item.id)}
+                onUndo={() => mutate((s) => void (s.items[index].sets[0].done = false))}
+                onField={(field) => openPad({ itemId: item.id, setIndex: 0, field })}
+              />
+            ) : (
             <SetsTable
               item={item}
               fields={fields}
@@ -319,13 +422,11 @@ export function SessionScreen({ id }: { id: string }) {
               hints={(i) => hintsFor(item, i)}
               onField={(setIndex, field) => openPad({ itemId: item.id, setIndex, field })}
               onDone={(setIndex) => markDone(item.id, setIndex)}
-              onTimer={(setIndex, sec) => {
-                primeAudio();
-                setWork({ itemId: item.id, setIndex, endsAt: Date.now() + sec * 1000 });
-              }}
+              onTimer={(setIndex, sec) => startWork(item.id, setIndex, sec, 'cuenta-regresiva')}
             />
+            )}
             <div className="ex-actions">
-              <button
+              {exercise?.movement === 'Cardio' ? <span /> : <button
                 className="link"
                 onClick={() =>
                   mutate((s) => {
@@ -336,7 +437,7 @@ export function SessionScreen({ id }: { id: string }) {
                 }
               >
                 + Agregar serie
-              </button>
+              </button>}
               <span className="ex-actions-right">
                 <button className="link" onClick={() => setSheet('sustituir')}>
                   Sustituir
@@ -367,19 +468,35 @@ export function SessionScreen({ id }: { id: string }) {
           onNext={padNext}
           onClose={() => setPad(null)}
         />
-      ) : work ? (
+      ) : work && work.mode === 'cuenta-regresiva' ? (
         <div className="session-bar is-timer">
           <span className="timer-label">
-            {exercise?.name ?? 'Tiempo'} <strong>{formatClock(work.endsAt - now)}</strong>
+            {exById.get(session.items.find((x) => x.id === work.itemId)?.exerciseId ?? '')?.name ?? 'Tiempo'}{' '}
+            <strong>{formatClock(work.durationSec * 1000 - workMs)}</strong>
           </span>
-          <button className="btn" onClick={() => setWork(null)}>
+          <button className="btn btn-sm" onClick={() => pauseWork(!work.pausedAt)}>
+            {work.pausedAt ? 'Seguir' : 'Pausar'}
+          </button>
+          <button className="btn btn-sm" onClick={() => mutate((s) => void (s.work = undefined))}>
             Detener
           </button>
         </div>
       ) : restLeft > 0 ? (
         <div className="session-bar is-timer" role="timer" aria-live="off">
           <span className="timer-label">
-            Descanso <strong>{formatClock(restLeft)}</strong>
+            {(() => {
+              // Qué sigue, para no tener que subir hasta el mensaje del coach.
+              const done = item.sets.filter((x) => x.done).length;
+              const next = session.items[index + 1];
+              const what =
+                done < item.sets.length
+                  ? `sigue la serie ${done + 1} de ${item.sets.length}`
+                  : next
+                    ? `sigue ${exById.get(next.exerciseId)?.name ?? 'el próximo'}`
+                    : '';
+              return `Descanso${what ? ` · ${what}` : ''}`;
+            })()}{' '}
+            <strong>{formatClock(restLeft)}</strong>
           </span>
           <button
             className="btn btn-sm"
@@ -474,9 +591,15 @@ export function SessionScreen({ id }: { id: string }) {
         />
       )}
 
+      {celebration && <Celebration {...celebration} onClose={() => switchTab('/hoy')} />}
+
       {sheet === 'terminar' && <FinishSheet session={session} summary={sum} onCancel={() => setSheet(null)} onFinish={async (extra) => {
         await finishSession(id, extra);
-        switchTab('/hoy');
+        const [fresh, all] = await Promise.all([db.sessions.get(id), db.sessions.toArray()]);
+        const week = weekStats(all, data.weekPlan, new Date(), 1)[0];
+        setSheet(null);
+        if (fresh) setCelebration(celebrate(fresh, all, (eid) => exById.get(eid)?.name ?? eid, { done: week.gym, planned: week.planned }));
+        else switchTab('/hoy');
       }} />}
 
       {sheet === 'descartar' && (
@@ -763,5 +886,100 @@ function FinishSheet(props: {
       </label>
       {props.session.mode === 'corta' && <Badge tone="accent">Versión corta</Badge>}
     </Sheet>
+  );
+}
+
+/** Cardio: cronómetro con meta en un anillo que se va llenando, pausa y datos opcionales de la cinta o la bici. */
+function CardioPanel(props: {
+  item: SessionItem;
+  work?: WorkTimer;
+  elapsedMs: number;
+  pad: PadTarget | null;
+  onStart: () => void;
+  onPause: (pause: boolean) => void;
+  onFinish: () => void;
+  onUndo: () => void;
+  onField: (field: PadField) => void;
+}) {
+  const { item, work, pad } = props;
+  const set = item.sets[0];
+  if (!set) return null;
+  const planned = set.planned ?? {};
+  const target = planned.durationSec ?? 1800;
+  const max = planned.durationMaxSec;
+  const elapsedSec = work ? props.elapsedMs / 1000 : set.done ? (set.durationSec ?? 0) : 0;
+  const frac = Math.min(1, elapsedSec / target);
+  const r = 86;
+  const c = 2 * Math.PI * r;
+  const metaText = `Meta ${Math.round(target / 60)}${max ? `–${Math.round(max / 60)}` : ''} min`;
+  const field = (f: PadField, unit: string) => {
+    const v = f === 'durationMin' ? (set.durationSec !== undefined ? set.durationSec / 60 : undefined) : (set[f as 'distanceKm' | 'speedKmh' | 'inclinePct'] as number | undefined);
+    const isActive = pad?.itemId === item.id && pad.field === f;
+    return (
+      <button key={f} className={`set-field${isActive ? ' is-active' : ''}${v === undefined ? ' is-empty' : ''}`} onClick={() => props.onField(f)} aria-label={`${LABEL[f]}: ${v ?? 'sin cargar'}`}>
+        {v !== undefined ? num(f === 'durationMin' ? Math.round(v) : v) : '—'}
+        <span className="set-unit">{unit}</span>
+      </button>
+    );
+  };
+
+  return (
+    <div className="cardio">
+      <div className={`cardio-ring${work?.pausedAt ? ' is-paused' : ''}`}>
+        <svg viewBox="0 0 200 200" width="200" height="200" aria-hidden="true">
+          <circle cx="100" cy="100" r={r} className="cardio-track" />
+          <circle
+            cx="100"
+            cy="100"
+            r={r}
+            className={`cardio-progress${frac >= 1 ? ' is-done' : ''}`}
+            strokeDasharray={c}
+            strokeDashoffset={c * (1 - frac)}
+            transform="rotate(-90 100 100)"
+          />
+        </svg>
+        <div className="cardio-center" role="timer" aria-label={`${formatClock(elapsedSec * 1000)} de ${metaText}`}>
+          <strong>{formatClock(elapsedSec * 1000)}</strong>
+          <span>{set.done ? 'Hecho' : work?.pausedAt ? 'En pausa' : metaText}</span>
+        </div>
+      </div>
+
+      {set.done ? (
+        <div className="cardio-actions">
+          <p className="done-line">
+            <Icon name="check" size={18} /> Listo · {formatLoggedSet(set)}
+          </p>
+          <button className="btn btn-sm" onClick={props.onUndo}>
+            Deshacer
+          </button>
+        </div>
+      ) : !work ? (
+        <div className="cardio-actions is-column">
+          <button className="btn btn-primary btn-xl" onClick={props.onStart}>
+            ▶ Empezar
+          </button>
+          <button className="link" onClick={props.onFinish}>
+            Ya lo hice: anotar {Math.round(target / 60)} min sin cronómetro
+          </button>
+        </div>
+      ) : (
+        <div className="cardio-actions">
+          <button className="btn btn-xl" onClick={() => props.onPause(!work.pausedAt)}>
+            {work.pausedAt ? '▶ Seguir' : '❚❚ Pausar'}
+          </button>
+          <button className="btn btn-primary btn-xl" onClick={props.onFinish}>
+            Terminar
+          </button>
+        </div>
+      )}
+
+      <div className="cardio-fields">
+        {set.done && field('durationMin', 'min')}
+        {field('distanceKm', 'km')}
+        {field('speedKmh', 'km/h')}
+        {field('inclinePct', '% incl.')}
+      </div>
+      <p className="hint">Distancia, velocidad e inclinación son opcionales: anotalas si la cinta o la bici las muestran.</p>
+    </div>
   );
 }

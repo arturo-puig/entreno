@@ -55,7 +55,7 @@ function renderScreen(tab: string, detail?: string, action?: string) {
     case 'sesion':
       return detail ? <SessionScreen id={detail} /> : <Today />;
     case 'asistente':
-      return <AssistantScreen />;
+      return <AssistantScreen initial={detail} />;
     default:
       return <Today />;
   }

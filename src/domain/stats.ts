@@ -160,14 +160,17 @@ export function createActivity(params: {
   effort?: number;
   note?: string;
   now?: Date;
+  /** Si el día tocaba una rutina de cardio, puede contar como esa sesión. */
+  countAs?: { routineId: string; name: string };
 }): Session {
   const now = (params.now ?? new Date()).toISOString();
   return {
     id: `a-${uid()}`,
-    kind: 'actividad',
+    kind: params.countAs ? 'entrenamiento' : 'actividad',
+    routineId: params.countAs?.routineId,
     source: 'registro',
     date: params.date,
-    name: params.name,
+    name: params.countAs?.name ?? params.name,
     status: 'completa',
     startedAt: now,
     finishedAt: now,
