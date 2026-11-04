@@ -134,7 +134,13 @@ export function RoutineEditor({ id }: { id: string }) {
       </div>
 
       {editing && (
-        <ItemEditorSheet item={editing} exercise={exById.get(editing.exerciseId)} onApply={applyItem} onCancel={() => setEditing(null)} />
+        <ItemEditorSheet
+          item={editing}
+          exercise={exById.get(editing.exerciseId)}
+          exercises={data.exercises}
+          onApply={applyItem}
+          onCancel={() => setEditing(null)}
+        />
       )}
       {picking && (
         <ExercisePickerSheet
@@ -175,8 +181,20 @@ export function RoutineEditor({ id }: { id: string }) {
 
 // ——— Editor de un ejercicio dentro de la rutina ———
 
-function ItemEditorSheet(props: { item: RoutineItem; exercise?: Exercise; onApply: (i: RoutineItem) => void; onCancel: () => void }) {
+function ItemEditorSheet(props: {
+  item: RoutineItem;
+  exercise?: Exercise;
+  exercises: Exercise[];
+  onApply: (i: RoutineItem) => void;
+  onCancel: () => void;
+}) {
   const { exercise } = props;
+  // Respaldo: primero las sustituciones sugeridas del ejercicio, después del mismo grupo, después el resto.
+  const suggestedIds = new Set(exercise?.substitutions ?? []);
+  const others = props.exercises.filter((e) => e.id !== props.item.exerciseId && !suggestedIds.has(e.id) && e.movement !== 'Cardio');
+  const suggested = props.exercises.filter((e) => suggestedIds.has(e.id));
+  const sameGroup = others.filter((e) => e.group === exercise?.group).sort((a, b) => a.name.localeCompare(b.name, 'es'));
+  const rest = others.filter((e) => e.group !== exercise?.group).sort((a, b) => a.name.localeCompare(b.name, 'es'));
   const [item, setItem] = useState<RoutineItem>(() => structuredClone(props.item));
   const [kind, setKind] = useState<TargetKind>(() => targetKindOf(props.item.sets));
   const [hasPending, setHasPending] = useState(!!props.item.pending);
@@ -191,6 +209,7 @@ function ItemEditorSheet(props: { item: RoutineItem; exercise?: Exercise; onAppl
       referenceLoadKg: parseNumber(refLoad),
       variant: item.variant || undefined,
       note: item.note?.trim() || undefined,
+      backupExerciseId: item.backupExerciseId || undefined,
     };
     if (out.short?.sets) out.short = { sets: Math.min(out.short.sets, out.sets.length) };
     props.onApply(out);
@@ -359,6 +378,40 @@ function ItemEditorSheet(props: { item: RoutineItem; exercise?: Exercise; onAppl
         </div>
 
         <Switch checked={!!item.optional} onChange={(v) => set({ optional: v || undefined })} label="Ejercicio opcional" description="Se hace según cómo estés ese día." />
+
+        <Field
+          label="Respaldo si la máquina está ocupada"
+          help="En la sesión aparece «Máquina ocupada» para cambiar en un toque. Se mantienen las mismas series y repeticiones; el plan de tu profe no cambia."
+        >
+          <select className="input" value={item.backupExerciseId ?? ''} onChange={(e) => set({ backupExerciseId: e.target.value || undefined })}>
+            <option value="">Sin respaldo</option>
+            {suggested.length > 0 && (
+              <optgroup label="Sustituciones sugeridas">
+                {suggested.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {sameGroup.length > 0 && (
+              <optgroup label={`Otros de ${exercise?.group ?? 'este grupo'}`}>
+                {sameGroup.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            <optgroup label="Todos los demás">
+              {rest.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.name}
+                </option>
+              ))}
+            </optgroup>
+          </select>
+        </Field>
 
         <Switch
           checked={!!item.short}

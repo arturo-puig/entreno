@@ -59,4 +59,7 @@ function beep() {
 export function alertDone(prefs: Prefs) {
   if (prefs.vibrate) navigator.vibrate?.([220, 120, 220]);
   if (prefs.sound) beep();
+  if (prefs.flash !== false) window.dispatchEvent(new Event(FLASH_EVENT));
 }
+
+export const FLASH_EVENT = 'entreno:destello';

@@ -2,7 +2,7 @@ import { db, getWeekPlan, setWeekPlan } from './db';
 import type { AssistantLogEntry, DayPlan, Exercise, Prefs, Readiness, Routine, Session, UserMedia } from './types';
 import type { Mode } from '../domain/plan';
 import { createSession, sessionStatus, staleSessions } from '../domain/session';
-import { createActivity } from '../domain/stats';
+import { countActivityAs, createActivity } from '../domain/stats';
 import { ROUTINES } from '../data/routines';
 import { duplicateRoutine, emptyRoutine, sessionToRoutine, uid, withNewVersion } from '../domain/edit';
 import { replaceDay, slugify } from '../domain/catalog';
@@ -24,7 +24,20 @@ export async function restoreRoutine(routineId: string): Promise<void> {
   const original = ROUTINES.find((r) => r.id === routineId);
   const current = await db.routines.get(routineId);
   if (!original) throw new Error('Esta rutina no tiene una versión original.');
-  await db.routines.put({ ...structuredClone(original), version: (current?.version ?? 0) + 1, updatedAt: new Date().toISOString() });
+  // Los respaldos («si la máquina está ocupada») son tuyos, no del plan: se conservan.
+  const backups = new Map((current?.items ?? []).filter((i) => i.backupExerciseId).map((i) => [i.id, i.backupExerciseId]));
+  const restored = structuredClone(original);
+  for (const item of restored.items) if (backups.has(item.id)) item.backupExerciseId = backups.get(item.id);
+  await db.routines.put({ ...restored, version: (current?.version ?? 0) + 1, updatedAt: new Date().toISOString() });
+}
+
+/** Edición: guarda el ejercicio de respaldo de un ítem (no cambia series ni repeticiones). */
+export async function setItemBackup(routineId: string, routineItemId: string, exerciseId: string | undefined): Promise<void> {
+  const r = await db.routines.get(routineId);
+  const item = r?.items.find((i) => i.id === routineItemId);
+  if (!r || !item) return;
+  item.backupExerciseId = exerciseId;
+  await saveRoutine(r);
 }
 
 /** Acto: crea una copia personal y devuelve su id. */
@@ -145,7 +158,7 @@ export async function deleteUserMedia(id: string): Promise<void> {
 // ——— Sesiones de entrenamiento ———
 
 /** Registro: empieza la sesión del día y devuelve su id. */
-export async function startSession(params: { routine: Routine; mode: Mode; readiness?: Readiness; date: string }): Promise<string> {
+export async function startSession(params: { routine: Routine; mode: Mode; readiness?: Readiness; date: string; backfill?: boolean }): Promise<string> {
   const s = createSession({ ...params, now: new Date() });
   await db.sessions.add(s);
   return s.id;
@@ -177,6 +190,25 @@ export async function discardSession(id: string): Promise<void> {
   await db.sessions.delete(id);
 }
 
+/** Acto: borra una sesión o actividad ya registrada (se confirma en la interfaz). */
+export async function deleteSession(id: string): Promise<void> {
+  await db.sessions.delete(id);
+}
+
+/** Registro: corrige la fecha de una sesión (nunca a futuro). */
+export async function changeSessionDate(id: string, date: string, today: string): Promise<void> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > today) throw new Error('Elegí una fecha de hoy o anterior.');
+  await updateSession(id, (s) => {
+    s.date = date;
+  });
+}
+
+/** Registro: la actividad cuenta como la sesión de cardio del día, o vuelve a ser actividad aparte. */
+export async function setActivityCount(id: string, countAs: { routineId: string; name: string } | undefined): Promise<void> {
+  const s = await db.sessions.get(id);
+  if (s) await db.sessions.put(countActivityAs(s, countAs));
+}
+
 /** Al abrir la app: cierra o descarta sesiones que quedaron abiertas de otro día. */
 export async function closeStaleSessions(today: string): Promise<void> {
   const { close, discard } = staleSessions(await db.sessions.where('source').equals('registro').toArray(), today);
@@ -189,7 +221,7 @@ export async function closeStaleSessions(today: string): Promise<void> {
 
 // ——— Preferencias ———
 
-export const DEFAULT_PREFS: Prefs = { vibrate: true, sound: false, rpe: false };
+export const DEFAULT_PREFS: Prefs = { vibrate: true, sound: false, rpe: false, flash: true };
 
 export async function getPrefs(): Promise<Prefs> {
   return { ...DEFAULT_PREFS, ...((await db.meta.get('prefs'))?.value as Partial<Prefs> | undefined) };

@@ -1,5 +1,5 @@
 import type { DayPlan, DayState, Routine, Session } from '../db/types';
-import { addDays, startOfWeek, toISODate } from './dates';
+import { addDays, parseISODate, startOfWeek, toISODate } from './dates';
 
 const REST_DAY: Omit<DayPlan, 'weekday'> = { type: 'descanso', label: 'Descanso' };
 
@@ -83,4 +83,26 @@ export function missedProfessorRoutine(params: {
     if (!done) return byId.get(id!);
   }
   return undefined;
+}
+
+/**
+ * Si ese día tocaba una rutina de cardio y todavía no la registraste, una caminata, bici o trote
+ * puede contar como esa sesión. Devuelve la rutina, o nada.
+ */
+export function cardioRoutineOn(params: {
+  date: string;
+  weekPlan: DayPlan[];
+  routines: Routine[];
+  sessions: Session[];
+  day?: DayState;
+  /** Sesión que no cuenta como «ya registrada» (la actividad que estás convirtiendo). */
+  excludeId?: string;
+}): { routineId: string; name: string } | undefined {
+  const plan = planFor(params.weekPlan, parseISODate(params.date));
+  const routine = params.routines.find((r) => r.id === effectiveRoutineId(plan, params.day));
+  if (!routine || routine.kind !== 'cardio') return undefined;
+  const already = params.sessions.some(
+    (s) => s.id !== params.excludeId && s.source === 'registro' && s.date === params.date && s.routineId === routine.id,
+  );
+  return already ? undefined : { routineId: routine.id, name: routine.name };
 }

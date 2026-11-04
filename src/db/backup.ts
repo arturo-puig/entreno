@@ -34,6 +34,30 @@ export async function downloadExport(): Promise<void> {
   await db.meta.put({ key: 'lastExportAt', value: data.exportedAt });
 }
 
+/** ¿Se puede compartir un archivo (menú de Android: Drive, WhatsApp, mail…)? */
+export function canShareFiles(): boolean {
+  try {
+    const f = new File(['{}'], 'x.json', { type: 'application/json' });
+    return !!navigator.canShare?.({ files: [f] });
+  } catch {
+    return false;
+  }
+}
+
+/** Comparte la copia con otra app del celular (por ejemplo, «Guardar en Drive»). Devuelve false si cancelaste. */
+export async function shareExport(): Promise<boolean> {
+  const data = await buildExport();
+  const file = new File([JSON.stringify(data, null, 2)], `entreno-copia-${data.exportedAt.slice(0, 10)}.json`, { type: 'application/json' });
+  try {
+    await navigator.share({ files: [file], title: 'Copia de Entreno' });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') return false;
+    throw new Error('No se pudo compartir la copia.');
+  }
+  await db.meta.put({ key: 'lastExportAt', value: data.exportedAt });
+  return true;
+}
+
 // ——— Importar una copia ———
 
 type Tables = Awaited<ReturnType<typeof buildExport>>['tables'];

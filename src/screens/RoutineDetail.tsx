@@ -77,7 +77,7 @@ export function RoutineDetail({ id }: { id: string }) {
           {g.label && <h3 className="group-label">{g.label}</h3>}
           <div className="stack-sm">
             {g.items.map((item) => (
-              <ItemCard key={item.id} n={++index} item={item} exercise={exById.get(item.exerciseId)} mode={mode} />
+              <ItemCard key={item.id} n={++index} item={item} exercise={exById.get(item.exerciseId)} mode={mode} backupName={item.backupExerciseId ? exById.get(item.backupExerciseId)?.name : undefined} />
             ))}
           </div>
         </section>
@@ -140,7 +140,7 @@ function groupItems(items: RoutineItem[]) {
   return out;
 }
 
-function ItemCard({ n, item, exercise, mode }: { n: number; item: RoutineItem; exercise?: Exercise; mode: Mode }) {
+function ItemCard({ n, item, exercise, mode, backupName }: { n: number; item: RoutineItem; exercise?: Exercise; mode: Mode; backupName?: string }) {
   return (
     <article className="card item-card">
       <button className="item-head" onClick={() => navigate(`/ejercicios/${item.exerciseId}`)}>
@@ -161,6 +161,12 @@ function ItemCard({ n, item, exercise, mode }: { n: number; item: RoutineItem; e
           <div>
             <dt>Descanso</dt>
             <dd>{formatRest(item.restSec)}</dd>
+          </div>
+        )}
+        {backupName && (
+          <div>
+            <dt>Si está ocupada</dt>
+            <dd>{backupName}</dd>
           </div>
         )}
         {item.referenceLoadKg !== undefined && (

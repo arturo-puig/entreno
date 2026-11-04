@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import { deleteAllData, downloadExport, replaceAllData, validateBackup, type BackupCheck } from '../db/backup';
+import { canShareFiles, deleteAllData, downloadExport, replaceAllData, shareExport, validateBackup, type BackupCheck } from '../db/backup';
+import { DriveBackup } from '../ui/DriveBackup';
 import { DEFAULT_PREFS, setPrefs } from '../db/actions';
 import type { Prefs } from '../db/types';
 import { applyUpdate, promptInstall, usePwa } from '../pwa';
@@ -138,6 +139,12 @@ export function Settings() {
               />
               <Switch checked={prefs.sound} onChange={(v) => setPrefs({ sound: v })} label="Sonido al terminar el descanso" description="Dos pitidos cortos." />
               <Switch
+                checked={prefs.flash}
+                onChange={(v) => setPrefs({ flash: v })}
+                label="Destello de pantalla al terminar el descanso"
+                description="Tres pulsos suaves de color: útil en gimnasios ruidosos."
+              />
+              <Switch
                 checked={prefs.rpe}
                 onChange={(v) => setPrefs({ rpe: v })}
                 label="Registrar esfuerzo por serie (RPE)"
@@ -187,10 +194,23 @@ export function Settings() {
       <section className="section">
         <h2 className="section-title">Copia de seguridad</h2>
         <div className="card stack-sm">
-          <p>Descargá un archivo con tus rutinas, ejercicios e historial. Guardalo en Drive o mandátelo por mail.</p>
+          <p>Un archivo con tus rutinas, ejercicios e historial. Guardalo en Drive o mandátelo por mail.</p>
           <button className="btn btn-primary btn-block" onClick={() => run(downloadExport)} disabled={busy}>
             <Icon name="download" size={20} /> Exportar datos (JSON)
           </button>
+          {canShareFiles() && (
+            <button
+              className="btn btn-block"
+              disabled={busy}
+              onClick={() =>
+                run(async () => {
+                  if (await shareExport()) setNotice('Copia compartida.');
+                })
+              }
+            >
+              Compartir copia (Drive, mail, WhatsApp…)
+            </button>
+          )}
           <p className="hint">
             {last ? `Última copia: ${new Date(last).toLocaleString('es-AR')}` : 'Todavía no hiciste ninguna copia.'}
           </p>
@@ -201,6 +221,13 @@ export function Settings() {
           <p className="hint">Los videos y fotos que agregás a los ejercicios no entran en la copia (pesan mucho): quedan solo en el celular.</p>
           {error && <p className="error-text">{error}</p>}
           {notice && <p className="done-line">{notice}</p>}
+        </div>
+      </section>
+
+      <section className="section">
+        <h2 className="section-title">Copia en Google Drive</h2>
+        <div className="card stack-sm">
+          <DriveBackup />
         </div>
       </section>
 
@@ -233,7 +260,8 @@ export function Settings() {
         <h2 className="section-title">Cómo se guardan tus datos</h2>
         <div className="card prose">
           <ul className="bullets">
-            <li>Todo se guarda solo en este celular, dentro del navegador. No hay cuentas ni servidores.</li>
+            <li>Todo se guarda en este celular, dentro del navegador. No hay cuentas ni servidores propios.</li>
+            <li>Si conectás Google Drive, la copia va a tu Drive y solo vos la ves.</li>
             <li>Cada cambio se guarda en el momento.</li>
             <li>
               Si borrás los datos del navegador o del sitio, o cambiás de celular, los datos se pierden salvo que tengas

@@ -1,23 +1,28 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, getWeekPlan } from '../db/db';
-import { discardSession, finishSession, getPrefs, updateSession } from '../db/actions';
+import {
+  changeSessionDate, deleteSession, discardSession, finishSession, getPrefs, setActivityCount, setItemBackup, updateSession,
+} from '../db/actions';
 import type { Exercise, LoggedSet, Session, SessionItem, WorkTimer } from '../db/types';
-import { capitalize, dayAndMonth, parseISODate, weekdayName } from '../domain/dates';
+import { addDays, capitalize, dayAndMonth, parseISODate, toISODate, weekdayName } from '../domain/dates';
 import { formatDuration, formatKg, formatLoggedSet, formatRest, summarizeSets } from '../domain/format';
 import { filterExercises, NO_FILTERS } from '../domain/search';
 import {
-  completeSet, fieldsFor, formatClock, previousRecord, progressionHint, remainingMs, setHints, summarize,
+  backupFor, completeSet, fieldsFor, formatClock, previousRecord, progressionHint, remainingMs, setHints, substituteItem, summarize,
   type FieldKind, type PreviousRecord, type SetHints,
 } from '../domain/session';
 import { switchTab } from '../router';
 import { Icon } from '../ui/Icon';
 import { Badge, ConfirmSheet, Loading, NotFound, PendingNote, Sheet } from '../ui/common';
 import { ExerciseMedia } from '../ui/ExerciseMedia';
+import { BodyMap } from '../ui/BodyMap';
 import { alertDone, primeAudio, useWakeLock } from '../ui/device';
 import { celebrate, coachLine, workElapsedMs, type CelebrationData } from '../domain/coach';
-import { weekStats } from '../domain/stats';
+import { CARDIO_LIKE, isActivity, isQuickActivity, weekStats } from '../domain/stats';
+import { cardioRoutineOn } from '../domain/schedule';
 import { CoachBubble } from '../ui/Coach';
+import { autoBackupFromTap, getDriveSettings, loadGis } from '../db/drive';
 import { Celebration } from '../ui/Celebration';
 
 type PadField = FieldKind | 'rpe' | 'speedKmh' | 'inclinePct';
@@ -63,19 +68,24 @@ function writeField(set: LoggedSet, f: PadField, v: number | undefined) {
 
 export function SessionScreen({ id }: { id: string }) {
   const data = useLiveQuery(async () => {
-    const [session, exercises, sessions, prefs, weekPlan] = await Promise.all([
+    const [session, exercises, sessions, prefs, weekPlan, routines, drive] = await Promise.all([
       db.sessions.get(id),
       db.exercises.toArray(),
       db.sessions.toArray(),
       getPrefs(),
       getWeekPlan(),
+      db.routines.toArray(),
+      getDriveSettings(),
     ]);
-    return { session: session ?? null, exercises, sessions, prefs, weekPlan };
+    return { session: session ?? null, exercises, sessions, prefs, weekPlan, routines, drive };
   }, [id]);
 
   const session = data?.session;
   const active = session?.status === 'en-curso';
-  useWakeLock(!!active);
+  // Sesión hecha en papel: sin temporizadores, sin coach y sin pantalla encendida.
+  const backfill = !!session?.backfill;
+  const until = backfill ? (session?.date ?? undefined) : undefined;
+  useWakeLock(!!active && !backfill);
 
   // El intervalo solo redibuja; el tiempo se calcula siempre con la hora exacta.
   const [tick, setTick] = useState(0);
@@ -84,7 +94,8 @@ export function SessionScreen({ id }: { id: string }) {
   const [padText, setPadText] = useState('');
   const [padFresh, setPadFresh] = useState(true);
   const [restEnded, setRestEnded] = useState(false);
-  const [sheet, setSheet] = useState<'lista' | 'sustituir' | 'terminar' | 'descartar' | null>(null);
+  const [sheet, setSheet] = useState<'lista' | 'sustituir' | 'ocupada' | 'terminar' | 'descartar' | 'fecha' | 'borrar' | null>(null);
+  const [confirmSwap, setConfirmSwap] = useState<string | null>(null);
   const [howOpen, setHowOpen] = useState<Record<string, boolean>>({});
   const notifiedRest = useRef<string | undefined>(undefined);
   const notifiedWork = useRef<string | undefined>(undefined);
@@ -95,6 +106,12 @@ export function SessionScreen({ id }: { id: string }) {
     const t = window.setInterval(() => setTick((n) => n + 1), 250);
     return () => window.clearInterval(t);
   }, []);
+
+  // Copia automática en Drive: el script de Google se carga antes, así al terminar la ventana no queda bloqueada.
+  const driveAuto = !!(data?.drive.auto && data.drive.clientId && active);
+  useEffect(() => {
+    if (driveAuto && navigator.onLine) loadGis().catch(() => undefined);
+  }, [driveAuto]);
 
   const exById = useMemo(() => new Map((data?.exercises ?? []).map((e) => [e.id, e])), [data?.exercises]);
   const restLeft = remainingMs(session?.restEndsAt, now);
@@ -148,7 +165,7 @@ export function SessionScreen({ id }: { id: string }) {
   const index = Math.min(session.currentIndex ?? 0, session.items.length - 1);
   const item = session.items[index];
   const exercise = exById.get(item.exerciseId);
-  const previous = previousRecord(data.sessions, item.exerciseId, session.id);
+  const previous = previousRecord(data.sessions, item.exerciseId, session.id, until);
   const fields = fieldsFor(exercise, item);
   const sum = summarize(session, new Date(now));
   const isLast = index === session.items.length - 1;
@@ -165,13 +182,24 @@ export function SessionScreen({ id }: { id: string }) {
   };
 
   function hintsFor(it: SessionItem, i: number) {
-    return setHints(it, i, previousRecord(data!.sessions, it.exerciseId, session!.id));
+    return setHints(it, i, previousRecord(data!.sessions, it.exerciseId, session!.id, until));
+  }
+
+  /** Cambia el ejercicio solo en esta sesión. Si ya registraste series, primero pregunta. */
+  function swapTo(exerciseId: string, confirmed = false) {
+    const it = session!.items[index];
+    if (!confirmed && it.sets.some((x) => x.done)) return setConfirmSwap(exerciseId);
+    setConfirmSwap(null);
+    setPad(null);
+    mutate((s) => {
+      s.items[index] = substituteItem(s.items[index], exerciseId);
+    });
   }
 
   function startRest(it: SessionItem, setIndex: number) {
     const restSec = it.plan?.restSec ?? 60;
     const lastOfAll = it === session!.items[session!.items.length - 1] && setIndex === it.sets.length - 1;
-    if (!active || restSec <= 0 || lastOfAll) return;
+    if (!active || backfill || restSec <= 0 || lastOfAll) return;
     mutate((s) => {
       s.restEndsAt = new Date(Date.now() + restSec * 1000).toISOString();
     });
@@ -192,6 +220,7 @@ export function SessionScreen({ id }: { id: string }) {
     await mutate((s) => {
       const fresh = s.items.find((x) => x.id === itemId)!;
       completed = completeSet(fresh.sets[setIndex], h);
+      if (s.backfill) delete completed.completedAt; // la hora real no se conoce
       fresh.sets[setIndex] = completed;
       if (s.work?.itemId === itemId && s.work.setIndex === setIndex) s.work = undefined;
     });
@@ -232,7 +261,7 @@ export function SessionScreen({ id }: { id: string }) {
         ...set,
         durationSec: elapsedSec && elapsedSec >= 60 ? elapsedSec : (set.durationSec ?? set.planned?.durationSec),
         done: true,
-        completedAt: new Date().toISOString(),
+        ...(s.backfill ? {} : { completedAt: new Date().toISOString() }),
       };
       if (s.work?.itemId === itemId) s.work = undefined;
     });
@@ -303,13 +332,19 @@ export function SessionScreen({ id }: { id: string }) {
   return (
     <div className={`session${pad ? ' has-pad' : ''}`}>
       <header className="session-top">
-        <button className="icon-btn" onClick={() => switchTab(active ? '/hoy' : '/progreso')} aria-label={active ? 'Salir (la sesión queda guardada)' : 'Volver'}>
+        <button
+          className="icon-btn"
+          onClick={() => switchTab(active && !backfill ? '/hoy' : '/progreso')}
+          aria-label={active ? 'Salir (la sesión queda guardada)' : 'Volver'}
+        >
           <Icon name="close" />
         </button>
         <div className="session-top-main">
           <span className="session-top-title">{session.name}</span>
           <span className="session-top-sub">
-            Ejercicio {index + 1} de {session.items.length} · {formatClock(elapsed)}
+            Ejercicio {index + 1} de {session.items.length} ·{' '}
+            {backfill || !active ? dateLabel(session.date) : formatClock(elapsed)}
+            {backfill && ' · en papel'}
             {!active && ` · ${session.status === 'completa' ? 'completa' : 'incompleta'}`}
           </span>
         </div>
@@ -345,7 +380,7 @@ export function SessionScreen({ id }: { id: string }) {
               }
             : undefined,
         });
-        return active ? <CoachBubble text={text} /> : null;
+        return active && !backfill ? <CoachBubble text={text} /> : null;
       })()}
 
       <section className="ex">
@@ -353,7 +388,14 @@ export function SessionScreen({ id }: { id: string }) {
           {exercise?.name ?? 'Ejercicio'}
           {item.variant && <span className="row-variant"> · {item.variant}</span>}
         </h1>
-        {item.substitutedFrom && <p className="hint">En lugar de {exById.get(item.substitutedFrom)?.name ?? 'otro ejercicio'}.</p>}
+        {item.substitutedFrom && (
+          <p className="hint">
+            En lugar de {exById.get(item.substitutedFrom)?.name ?? 'otro ejercicio'}.{' '}
+            <button className="link link-inline" onClick={() => swapTo(item.substitutedFrom!)}>
+              Volver al original
+            </button>
+          </p>
+        )}
         {item.plan && (
           <p className="ex-plan">
             <span className="ex-plan-label">Plan</span> {summarizeSets(item.plan, session.mode === 'corta' ? 'corta' : 'completa')}
@@ -387,6 +429,7 @@ export function SessionScreen({ id }: { id: string }) {
                     ))}
                   </ol>
                 )}
+                <BodyMap primary={exercise.primaryMuscles} secondary={exercise.secondaryMuscles} compact />
                 <p className="muted small">
                   <span className="label">Músculos</span> {exercise.primaryMuscles.join(', ')}
                 </p>
@@ -402,6 +445,7 @@ export function SessionScreen({ id }: { id: string }) {
 
             {exercise?.movement === 'Cardio' ? (
               <CardioPanel
+                backfill={backfill}
                 item={item}
                 work={work && work.itemId === item.id ? work : undefined}
                 elapsedMs={work && work.itemId === item.id ? workMs : 0}
@@ -422,7 +466,7 @@ export function SessionScreen({ id }: { id: string }) {
               hints={(i) => hintsFor(item, i)}
               onField={(setIndex, field) => openPad({ itemId: item.id, setIndex, field })}
               onDone={(setIndex) => markDone(item.id, setIndex)}
-              onTimer={(setIndex, sec) => startWork(item.id, setIndex, sec, 'cuenta-regresiva')}
+              onTimer={backfill ? undefined : (setIndex, sec) => startWork(item.id, setIndex, sec, 'cuenta-regresiva')}
             />
             )}
             <div className="ex-actions">
@@ -439,6 +483,19 @@ export function SessionScreen({ id }: { id: string }) {
                 + Agregar serie
               </button>}
               <span className="ex-actions-right">
+                {!item.substitutedFrom && exercise?.movement !== 'Cardio' && (
+                  <button
+                    className="link"
+                    onClick={() => {
+                      const live = data.routines.find((r) => r.id === session.routineId)?.items.find((i) => i.id === item.routineItemId);
+                      const b = backupFor(item, live?.backupExerciseId);
+                      if (b && exById.has(b)) swapTo(b);
+                      else setSheet('ocupada');
+                    }}
+                  >
+                    Máquina ocupada
+                  </button>
+                )}
                 <button className="link" onClick={() => setSheet('sustituir')}>
                   Sustituir
                 </button>
@@ -524,7 +581,7 @@ export function SessionScreen({ id }: { id: string }) {
           </button>
           {isLast ? (
             <button className="btn btn-primary" onClick={() => (active ? setSheet('terminar') : switchTab('/progreso'))}>
-              {active ? 'Terminar' : 'Listo'}
+              {active ? (backfill ? 'Guardar' : 'Terminar') : 'Listo'}
             </button>
           ) : (
             <button className="btn btn-primary" onClick={() => goTo(index + 1)}>
@@ -565,36 +622,75 @@ export function SessionScreen({ id }: { id: string }) {
                 Descartar sesión
               </button>
               <button className="btn btn-primary" onClick={() => setSheet('terminar')}>
-                Terminar
+                {backfill ? 'Guardar' : 'Terminar'}
               </button>
+            </div>
+          )}
+          {(!active || backfill) && (
+            <div className="stack-sm list-tools">
+              <button className="btn btn-block" onClick={() => setSheet('fecha')}>
+                <Icon name="today" size={18} /> Cambiar fecha
+              </button>
+              {isQuickActivity(session) && <ActivityCountToggle session={session} data={data} />}
+              {!active && (
+                <button className="btn btn-ghost btn-block link-danger" onClick={() => setSheet('borrar')}>
+                  {isActivity(session) ? 'Borrar actividad' : 'Borrar sesión'}
+                </button>
+              )}
             </div>
           )}
         </Sheet>
       )}
 
-      {sheet === 'sustituir' && exercise && (
+      {(sheet === 'sustituir' || sheet === 'ocupada') && exercise && (
         <SubstituteSheet
           exercise={exercise}
           exercises={data.exercises}
           hasData={item.sets.some((x) => x.done)}
+          busy={sheet === 'ocupada'}
+          canRemember={!!(session.routineId && item.routineItemId && data.routines.some((r) => r.id === session.routineId))}
           onCancel={() => setSheet(null)}
-          onPick={(sub) => {
+          onPick={(sub, remember) => {
             setSheet(null);
-            mutate((s) => {
-              const it = s.items[index];
-              it.substitutedFrom ??= it.exerciseId;
-              it.exerciseId = sub.id;
-              it.variant = undefined;
-              it.sets = it.sets.map((x) => ({ done: false, planned: x.planned }));
-            });
+            if (remember && session.routineId && item.routineItemId) setItemBackup(session.routineId, item.routineItemId, sub.id);
+            swapTo(sub.id, true);
+          }}
+        />
+      )}
+
+      {confirmSwap && (
+        <ConfirmSheet
+          title={`¿Cambiar a ${exById.get(confirmSwap)?.name ?? 'otro ejercicio'}?`}
+          message="Las series que ya registraste de este ejercicio se borran de esta sesión."
+          confirmLabel="Cambiar"
+          onCancel={() => setConfirmSwap(null)}
+          onConfirm={() => swapTo(confirmSwap, true)}
+        />
+      )}
+
+      {sheet === 'fecha' && <DateSheet session={session} onClose={() => setSheet('lista')} />}
+
+      {sheet === 'borrar' && (
+        <ConfirmSheet
+          title={isActivity(session) ? '¿Borrar esta actividad?' : '¿Borrar esta sesión?'}
+          message={`Se borra el registro del ${dateLabel(session.date)}. No se puede deshacer (salvo que tengas una copia).`}
+          confirmLabel="Borrar"
+          danger
+          onCancel={() => setSheet('lista')}
+          onConfirm={async () => {
+            await deleteSession(id);
+            switchTab('/progreso');
           }}
         />
       )}
 
       {celebration && <Celebration {...celebration} onClose={() => switchTab('/hoy')} />}
 
-      {sheet === 'terminar' && <FinishSheet session={session} summary={sum} onCancel={() => setSheet(null)} onFinish={async (extra) => {
-        await finishSession(id, extra);
+      {sheet === 'terminar' && <FinishSheet session={session} backfill={backfill} summary={sum} onCancel={() => setSheet(null)} onFinish={async (extra) => {
+        const saved = finishSession(id, extra);
+        autoBackupFromTap(data.drive, saved); // en el mismo toque, antes de esperar nada
+        await saved;
+        if (backfill) return switchTab('/progreso');
         const [fresh, all] = await Promise.all([db.sessions.get(id), db.sessions.toArray()]);
         const week = weekStats(all, data.weekPlan, new Date(), 1)[0];
         setSheet(null);
@@ -639,7 +735,7 @@ function SetsTable(props: {
   hints: (i: number) => SetHints;
   onField: (setIndex: number, field: PadField) => void;
   onDone: (setIndex: number) => void;
-  onTimer: (setIndex: number, sec: number) => void;
+  onTimer?: (setIndex: number, sec: number) => void;
 }) {
   const { item, fields, previous, pad } = props;
   const show = (f: PadField, v: number | undefined) => {
@@ -682,8 +778,8 @@ function SetsTable(props: {
                   </button>
                 );
               })}
-              {(fields[0] === 'durationSec' || fields[0] === 'durationMin') && !set.done && planned?.durationSec && (
-                <button className="set-timer" onClick={() => props.onTimer(i, planned.durationSec!)} aria-label={`Iniciar ${formatDuration(planned.durationSec)}`}>
+              {props.onTimer && (fields[0] === 'durationSec' || fields[0] === 'durationMin') && !set.done && planned?.durationSec && (
+                <button className="set-timer" onClick={() => props.onTimer?.(i, planned.durationSec!)} aria-label={`Iniciar ${formatDuration(planned.durationSec)}`}>
                   ▶
                 </button>
               )}
@@ -768,14 +864,20 @@ function SubstituteSheet(props: {
   exercise: Exercise;
   exercises: Exercise[];
   hasData: boolean;
-  onPick: (e: Exercise) => void;
+  /** Abierto desde «Máquina ocupada» (sin respaldo guardado todavía). */
+  busy?: boolean;
+  /** Se puede guardar como respaldo en la rutina. */
+  canRemember?: boolean;
+  onPick: (e: Exercise, remember: boolean) => void;
   onCancel: () => void;
 }) {
   const [q, setQ] = useState('');
   const [confirm, setConfirm] = useState<Exercise | null>(null);
+  const [remember, setRemember] = useState(!!props.busy);
+  const showRemember = !!props.canRemember;
   const suggested = (props.exercise.substitutions ?? []).map((id) => props.exercises.find((e) => e.id === id)).filter((e): e is Exercise => !!e);
   const results = q ? filterExercises(props.exercises, { ...NO_FILTERS, q }).filter((e) => e.id !== props.exercise.id) : suggested;
-  const pick = (e: Exercise) => (props.hasData ? setConfirm(e) : props.onPick(e));
+  const pick = (e: Exercise) => (props.hasData ? setConfirm(e) : props.onPick(e, showRemember && remember));
 
   if (confirm) {
     return (
@@ -784,13 +886,21 @@ function SubstituteSheet(props: {
         message="Las series que ya registraste de este ejercicio se borran de esta sesión."
         confirmLabel="Cambiar"
         onCancel={() => setConfirm(null)}
-        onConfirm={() => props.onPick(confirm)}
+        onConfirm={() => props.onPick(confirm, showRemember && remember)}
       />
     );
   }
   return (
-    <Sheet title={`Sustituir ${props.exercise.name}`} onClose={props.onCancel}>
-      <p className="muted small">Solo cambia la sesión de hoy. La rutina sigue igual.</p>
+    <Sheet title={props.busy ? `${props.exercise.name}: máquina ocupada` : `Sustituir ${props.exercise.name}`} onClose={props.onCancel}>
+      <p className="muted small">
+        {props.busy ? 'Elegí con qué lo reemplazás hoy: se mantienen las mismas series y repeticiones.' : 'Solo cambia la sesión de hoy. La rutina sigue igual.'}
+      </p>
+      {showRemember && (
+        <label className="check check-block">
+          <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+          Usarlo como respaldo la próxima vez (un toque en «Máquina ocupada»)
+        </label>
+      )}
       <div className="search">
         <Icon name="search" size={20} />
         <input type="search" placeholder="Buscar otro ejercicio" aria-label="Buscar ejercicio para sustituir" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -817,6 +927,7 @@ function SubstituteSheet(props: {
 
 function FinishSheet(props: {
   session: Session;
+  backfill?: boolean;
   summary: ReturnType<typeof summarize>;
   onFinish: (extra: { sessionRpe?: number; note?: string }) => Promise<void>;
   onCancel: () => void;
@@ -828,7 +939,7 @@ function FinishSheet(props: {
   const pending = summary.setsPlanned - summary.setsDone;
   return (
     <Sheet
-      title="Terminar sesión"
+      title={props.backfill ? 'Guardar sesión' : 'Terminar sesión'}
       onClose={props.onCancel}
       footer={
         <div className="sheet-actions">
@@ -843,7 +954,7 @@ function FinishSheet(props: {
               await props.onFinish({ sessionRpe: rpe, note });
             }}
           >
-            Terminar
+            {props.backfill ? 'Guardar' : 'Terminar'}
           </button>
         </div>
       }
@@ -857,10 +968,12 @@ function FinishSheet(props: {
           <strong>{summary.exercisesDone}</strong>
           <span>de {summary.exercisesTotal} ejercicios</span>
         </div>
-        <div>
-          <strong>{summary.minutes ?? '—'}</strong>
-          <span>minutos</span>
-        </div>
+        {!props.backfill && (
+          <div>
+            <strong>{summary.minutes ?? '—'}</strong>
+            <span>minutos</span>
+          </div>
+        )}
       </div>
       {pending > 0 && (
         <p className="muted small">
@@ -891,6 +1004,7 @@ function FinishSheet(props: {
 
 /** Cardio: cronómetro con meta en un anillo que se va llenando, pausa y datos opcionales de la cinta o la bici. */
 function CardioPanel(props: {
+  backfill?: boolean;
   item: SessionItem;
   work?: WorkTimer;
   elapsedMs: number;
@@ -953,6 +1067,13 @@ function CardioPanel(props: {
             Deshacer
           </button>
         </div>
+      ) : props.backfill ? (
+        <div className="cardio-actions is-column">
+          <button className="btn btn-primary btn-xl" onClick={props.onFinish}>
+            Anotar {Math.round(target / 60)} min
+          </button>
+          <p className="hint">Después podés corregir los minutos.</p>
+        </div>
       ) : !work ? (
         <div className="cardio-actions is-column">
           <button className="btn btn-primary btn-xl" onClick={props.onStart}>
@@ -981,5 +1102,83 @@ function CardioPanel(props: {
       </div>
       <p className="hint">Distancia, velocidad e inclinación son opcionales: anotalas si la cinta o la bici las muestran.</p>
     </div>
+  );
+}
+
+function dateLabel(date: string | null): string {
+  if (!date) return 'sin fecha';
+  const d = parseISODate(date);
+  return `${weekdayName(d)} ${dayAndMonth(d)}`;
+}
+
+/** Corregir la fecha de una sesión o actividad (hoy o antes). */
+function DateSheet({ session, onClose }: { session: Session; onClose: () => void }) {
+  const today = toISODate(new Date());
+  const [date, setDate] = useState(session.date ?? today);
+  const [error, setError] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  return (
+    <Sheet
+      title="Cambiar fecha"
+      onClose={onClose}
+      footer={
+        <div className="sheet-actions">
+          <button className="btn" onClick={onClose} disabled={busy}>
+            Cancelar
+          </button>
+          <button
+            className="btn btn-primary"
+            disabled={busy || !date || date === session.date}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await changeSessionDate(session.id, date, today);
+                onClose();
+              } catch (e) {
+                setError(e instanceof Error ? e.message : String(e));
+                setBusy(false);
+              }
+            }}
+          >
+            Guardar
+          </button>
+        </div>
+      }
+    >
+      <p className="muted small">Ahora: {capitalize(dateLabel(session.date))}. Lo registrado no cambia; solo el día en que cuenta.</p>
+      <div className="chips" role="group" aria-label="Atajos de fecha">
+        {[0, 1, 2].map((n) => {
+          const iso = toISODate(addDays(new Date(), -n));
+          return (
+            <button key={n} className="chip-btn" aria-pressed={date === iso} onClick={() => setDate(iso)}>
+              {n === 0 ? 'Hoy' : n === 1 ? 'Ayer' : 'Anteayer'}
+            </button>
+          );
+        })}
+      </div>
+      <label className="field">
+        <span className="field-label">Fecha</span>
+        <input className="input" type="date" value={date} max={today} onChange={(e) => setDate(e.target.value)} />
+      </label>
+      {error && <p className="error-text">{error}</p>}
+    </Sheet>
+  );
+}
+
+/** Caminata, bici o trote anotados en un toque: pueden contar como la sesión de cardio de ese día. */
+function ActivityCountToggle({ session, data }: { session: Session; data: { weekPlan: Parameters<typeof cardioRoutineOn>[0]['weekPlan']; routines: Parameters<typeof cardioRoutineOn>[0]['routines']; sessions: Session[] } }) {
+  if (!session.date || !CARDIO_LIKE.includes(session.items[0]?.exerciseId ?? '')) return null;
+  if (!isActivity(session))
+    return (
+      <button className="btn btn-block" onClick={() => setActivityCount(session.id, undefined)}>
+        Contar como actividad aparte
+      </button>
+    );
+  const target = cardioRoutineOn({ date: session.date, weekPlan: data.weekPlan, routines: data.routines, sessions: data.sessions, excludeId: session.id });
+  if (!target) return null;
+  return (
+    <button className="btn btn-block" onClick={() => setActivityCount(session.id, target)}>
+      Contar como {target.name} de ese día
+    </button>
   );
 }

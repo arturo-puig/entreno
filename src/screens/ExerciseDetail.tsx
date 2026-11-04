@@ -7,6 +7,7 @@ import { navigate } from '../router';
 import { Icon } from '../ui/Icon';
 import { Badge, Loading, NotFound, PendingNote, ScreenHeader } from '../ui/common';
 import { ExerciseMedia } from '../ui/ExerciseMedia';
+import { BodyMap } from '../ui/BodyMap';
 import { LineChart, SERIES_ACCENT } from '../ui/charts';
 import { exerciseProgress } from '../domain/stats';
 
@@ -55,6 +56,7 @@ export function ExerciseDetail({ id }: { id: string }) {
       <section className="section">
         <h2 className="section-title">Músculos</h2>
         <div className="card prose">
+          <BodyMap primary={ex.primaryMuscles} secondary={ex.secondaryMuscles} />
           <p>
             <span className="label">Principales</span> {ex.primaryMuscles.join(', ')}
           </p>

@@ -12,6 +12,7 @@ import { RoutineEditor } from './screens/RoutineEditor';
 import { ExerciseEditor } from './screens/ExerciseEditor';
 import { SessionScreen } from './screens/Session';
 import { AssistantScreen } from './screens/Assistant';
+import { FlashOverlay } from './ui/Flash';
 
 const TABS = ['hoy', 'rutinas', 'ejercicios', 'progreso', 'ajustes', 'sesion', 'asistente'];
 
@@ -35,6 +36,7 @@ export function App() {
         <ErrorBoundary key={isSession ? 'sesion' : key}>{renderScreen(tab, detail, action)}</ErrorBoundary>
       </main>
       {!isEditor && !isSession && <BottomNav active={tab} />}
+      <FlashOverlay />
     </div>
   );
 }

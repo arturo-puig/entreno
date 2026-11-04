@@ -344,6 +344,7 @@ try {
     await shot(page, '19-sesion-descanso');
     await page.clock.fastForward(92_000);
     check('descanso: termina solo y avisa', await has(page, 'Descanso terminado'));
+    check('destello: la pantalla destella al terminar el descanso', await page.locator('.flash').waitFor({ state: 'attached', timeout: 3000 }).then(() => true, () => false));
 
     // Completar sin escribir: toma la sugerencia visible; pregunta las repeticiones del rango.
     await set(2).getByRole('button', { name: /marcar como hecha/ }).click();
@@ -668,6 +669,224 @@ try {
     check('actividad: festejo chico', await has(page, '¡Bien!') || (await page.getByText('Anotaste caminata · 30 min como Cardio y movilidad').count()) > 0);
     check('actividad: cuenta como la sesión del día', await has(page, '¡Sesión hecha!', '1 de 5 sesiones'));
     check('actividad: sin errores en consola', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+
+  // ——— Pendientes: mapa de músculos y máquina ocupada ———
+  {
+    const { context, page, errors } = await openAt('2026-11-02T19:00:00-03:00'); // lunes
+    await page.goto(`${BASE}#/ejercicios/hip-thrust-maquina`);
+    await page.locator('.bodymap').first().scrollIntoViewIfNeeded();
+    check(
+      'mapa de músculos: frente y espalda con principal y secundario',
+      (await has(page, 'Frente', 'Espalda', 'Principal', 'Secundario', 'licencia MIT')) && (await page.locator('.bodymap .bm-primary').count()) > 0,
+    );
+    await page.locator('.bodymap').first().screenshot({ path: SHOTS ? join(SHOTS, '31-mapa-musculos.png') : undefined });
+
+    await page.goto(`${BASE}#/ajustes`);
+    check('destello: activado por defecto en Ajustes', await page.getByRole('switch', { name: /Destello de pantalla/ }).isChecked());
+
+    await page.getByRole('link', { name: 'Hoy' }).click();
+    await page.getByRole('button', { name: 'Comenzar' }).click();
+    await page.getByRole('button', { name: 'Lista de ejercicios' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: /Sentadilla en Smith/ }).click();
+    check('primera vez: «Cómo se hace» incluye el mapa de músculos', (await page.locator('.how .bodymap').count()) === 1);
+    await page.getByRole('button', { name: 'Máquina ocupada' }).click();
+    const busy = page.getByRole('dialog', { name: /máquina ocupada/ });
+    check('máquina ocupada sin respaldo: ofrece elegir y recordarlo', await busy.getByRole('checkbox', { name: /Usarlo como respaldo/ }).isChecked());
+    await shot(page, '32-maquina-ocupada');
+    await busy.getByRole('button', { name: /Sentadilla búlgara/ }).click();
+    check('máquina ocupada: cambia manteniendo el plan', await has(page, 'En lugar de Sentadilla en Smith', 'Sentadilla búlgara'));
+    await page.getByRole('button', { name: 'Volver al original' }).click();
+    check('volver al original', (await lacks(page, 'En lugar de Sentadilla en Smith')) && (await title(page)).startsWith('Sentadilla en Smith'));
+    await page.getByRole('button', { name: 'Máquina ocupada' }).click();
+    check(
+      'máquina ocupada con respaldo: un toque, sin preguntar',
+      (await has(page, 'En lugar de Sentadilla en Smith')) && (await page.getByRole('dialog').count()) === 0,
+    );
+    await page.getByRole('button', { name: 'Lista de ejercicios' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Descartar sesión' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Descartar' }).click();
+    await page.getByRole('navigation', { name: 'Secciones' }).waitFor();
+
+    await page.goto(`${BASE}#/rutinas/rutina-a`);
+    check('rutina: muestra el respaldo guardado', (await page.locator('article', { hasText: 'Sentadilla en Smith' }).innerText()).includes('Sentadilla búlgara'));
+    await page.getByRole('button', { name: 'Editar' }).click();
+    await page.locator('article', { hasText: 'Sentadilla en Smith' }).getByRole('button', { name: 'Editar' }).click();
+    check('editor: el respaldo se puede cambiar', (await page.getByRole('dialog').getByLabel('Respaldo si la máquina está ocupada').inputValue()) === 'sentadilla-bulgara');
+    check('pendientes (1): sin errores en consola', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+
+  // ——— Pendientes: sesión hecha en papel, cambiar fecha y borrar ———
+  {
+    const { context, page, errors } = await openAt('2026-11-03T20:00:00-03:00'); // martes
+    await page.getByRole('link', { name: 'Progreso' }).click();
+    await page.getByRole('button', { name: /Cargar una sesión hecha en papel/ }).click();
+    const sheet = page.getByRole('dialog', { name: 'Cargar sesión hecha en papel' });
+    check('papel: propone ayer y la rutina de ese día', (await sheet.getByRole('button', { name: 'Ayer', exact: true }).getAttribute('aria-pressed')) === 'true' && (await sheet.getByLabel('Rutina').inputValue()) === 'rutina-a');
+    await shot(page, '33-sesion-en-papel');
+    await sheet.getByRole('button', { name: 'Cargar series' }).click();
+    await page.locator('.session-top').waitFor();
+    check('papel: sesión marcada con su fecha y sin coach', (await page.locator('.session-top-sub').innerText()).includes('lunes 2 de noviembre · en papel') && (await page.locator('.coach').count()) === 0);
+    await page.locator('.set').first().getByRole('button', { name: /marcar como hecha/ }).click();
+    await page.locator('.set').first().getByRole('button', { name: /hecha \(tocá/ }).waitFor();
+    check('papel: sin descanso automático', (await page.locator('.session-bar.is-timer').count()) === 0);
+    await page.getByRole('button', { name: 'Lista de ejercicios' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Guardar' }).click();
+    const fin = page.getByRole('dialog', { name: 'Guardar sesión' });
+    check('papel: guardar sin minutos', (await fin.getByText('minutos').count()) === 0);
+    await fin.getByRole('button', { name: 'Guardar' }).click();
+    await page.getByRole('navigation', { name: 'Secciones' }).waitFor();
+    const row = (text, date) => page.locator('.row', { hasText: text }).filter({ hasText: date }).first().waitFor().then(() => true, () => false);
+    check('papel: queda en tus sesiones con su fecha', await row('Rutina A', 'Lunes 2 de noviembre'));
+    await shot(page, '34-papel-progreso');
+
+    await page.locator('.row', { hasText: 'Rutina A' }).click();
+    await page.getByRole('button', { name: 'Lista de ejercicios' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Cambiar fecha' }).click();
+    const dateSheet = page.getByRole('dialog', { name: 'Cambiar fecha' });
+    check('cambiar fecha: no deja elegir a futuro', (await dateSheet.getByLabel('Fecha', { exact: true }).getAttribute('max')) === '2026-11-03');
+    await dateSheet.getByRole('button', { name: 'Anteayer' }).click();
+    await dateSheet.getByRole('button', { name: 'Guardar' }).click();
+    check('cambiar fecha: se actualiza', await page.locator('.session-top-sub', { hasText: 'domingo 1 de noviembre' }).waitFor().then(() => true, () => false));
+    await page.getByRole('dialog').getByRole('button', { name: 'Borrar sesión' }).click();
+    await page.getByRole('dialog', { name: '¿Borrar esta sesión?' }).getByRole('button', { name: 'Borrar' }).click();
+    await page.getByRole('navigation', { name: 'Secciones' }).waitFor();
+    check('borrar sesión terminada: desaparece de Progreso', (await has(page, 'Cargar una sesión hecha en papel')) && (await page.locator('.row', { hasText: 'Rutina A' }).count()) === 0);
+    check('pendientes (2): sin errores en consola', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+
+  // ——— Pendientes: actividad de otro día y contarla (o no) como la sesión de cardio ———
+  {
+    const { context, page, errors } = await openAt('2026-11-05T09:00:00-03:00'); // jueves
+    await page.getByRole('button', { name: /Registrar actividad/ }).click();
+    let sheet = page.getByRole('dialog', { name: 'Registrar actividad' });
+    await sheet.getByRole('button', { name: 'Caminata' }).click();
+    await sheet.getByRole('button', { name: 'Ayer', exact: true }).click();
+    check('actividad de ayer (miércoles): puede contar como el cardio', await sheet.getByRole('switch', { name: /Cuenta como Cardio y movilidad de ayer/ }).isChecked());
+    await sheet.getByLabel('Minutos').fill('40');
+    await sheet.getByRole('button', { name: 'Guardar' }).click();
+    await page.getByRole('link', { name: 'Progreso' }).click();
+    const row = (text, date) => page.locator('.row', { hasText: text }).filter({ hasText: date }).first().waitFor().then(() => true, () => false);
+    check('actividad de ayer: figura como Cardio y movilidad', await row('Cardio y movilidad', 'Miércoles 4 de noviembre'));
+    await page.locator('.row', { hasText: 'Cardio y movilidad' }).click();
+    await page.getByRole('button', { name: 'Lista de ejercicios' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Contar como actividad aparte' }).click();
+    check(
+      'se puede volver a actividad aparte',
+      await page.getByRole('dialog').getByRole('button', { name: /Contar como Cardio y movilidad de ese día/ }).waitFor().then(() => true, () => false),
+    );
+    await page.keyboard.press('Escape');
+    await page.goto(`${BASE}#/progreso`);
+    check('actividad aparte: figura como Caminata', (await row('Caminata', 'Miércoles 4 de noviembre')) && (await page.locator('.row', { hasText: 'Cardio y movilidad' }).count()) === 0);
+
+    await page.getByRole('link', { name: 'Hoy' }).click();
+    await page.getByRole('button', { name: /Registrar actividad/ }).click();
+    sheet = page.getByRole('dialog', { name: 'Registrar actividad' });
+    await sheet.getByRole('button', { name: 'Pádel' }).click();
+    await sheet.getByRole('button', { name: 'Otro día' }).click();
+    await sheet.getByLabel('Fecha', { exact: true }).fill('2026-10-30');
+    await sheet.getByRole('button', { name: 'Guardar' }).click();
+    await page.getByRole('link', { name: 'Progreso' }).click();
+    check('actividad de otro día: con su fecha', await row('Pádel', 'Viernes 30 de octubre'));
+    check('pendientes (3): sin errores en consola', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+
+  // ——— Pendientes: copia en Google Drive (Google simulado: desde acá no se puede usar el real) ———
+  {
+    const { context, page, errors } = await openAt('2026-11-05T07:30:00-03:00'); // jueves
+    const drive = { files: new Map(), calls: [], down: false };
+    await context.route('https://accounts.google.com/gsi/client', (route) =>
+      route.fulfill({
+        contentType: 'text/javascript',
+        body: `window.__gis = 0; window.google = { accounts: { oauth2: {
+          initTokenClient: (cfg) => ({ requestAccessToken: () => { window.__gis++; setTimeout(() => cfg.callback({ access_token: 'tok-prueba', expires_in: 3599 }), 0); } }),
+          revoke: (t, done) => done && done() } } };`,
+      }),
+    );
+    await context.route('https://www.googleapis.com/**', async (route) => {
+      const req = route.request();
+      const url = new URL(req.url());
+      if (drive.down) return route.abort('internetdisconnected');
+      drive.calls.push(`${req.method()} ${url.pathname}`);
+      const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+      if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+      if (req.headers()['authorization'] !== 'Bearer tok-prueba') return route.fulfill({ status: 401, headers: cors });
+      const json = (v) => route.fulfill({ headers: cors, contentType: 'application/json', body: JSON.stringify(v) });
+      if (req.method() === 'GET' && url.pathname === '/drive/v3/files') return json({ files: [...drive.files.keys()].map((id) => ({ id })) });
+      if (req.method() === 'POST' && url.pathname === '/upload/drive/v3/files') {
+        const parts = req.postData().split('\r\n\r\n');
+        drive.files.set('f1', parts[2].split('\r\n--')[0]);
+        return json({ id: 'f1' });
+      }
+      const m = /files\/([^/]+)$/.exec(url.pathname);
+      if (m && drive.files.has(m[1])) {
+        if (req.method() === 'PATCH') {
+          drive.files.set(m[1], req.postData());
+          return json({ id: m[1] });
+        }
+        if (url.searchParams.get('alt') === 'media') return route.fulfill({ headers: cors, contentType: 'application/json', body: drive.files.get(m[1]) });
+        return json({ id: m[1], trashed: false });
+      }
+      return route.fulfill({ status: 404, headers: cors });
+    });
+    const sessionsInDrive = () => JSON.parse(drive.files.get('f1') ?? '{"tables":{"sessions":[]}}').tables.sessions.filter((x) => x.source === 'registro').length;
+    const waitFor = async (fn, ms = 5000) => {
+      for (let t = 0; t < ms; t += 100) {
+        if (fn()) return true;
+        await page.waitForTimeout(100);
+      }
+      return false;
+    };
+
+    await page.getByRole('link', { name: 'Ajustes' }).click();
+    await page.getByLabel('ID de cliente de Google').fill('mi-clave');
+    check('drive: avisa si el ID de cliente no tiene la forma correcta', await has(page, 'no parece un ID de cliente'));
+    await page.getByLabel('ID de cliente de Google').fill('123-prueba.apps.googleusercontent.com');
+    await page.getByRole('button', { name: 'Conectar con Google Drive' }).click();
+    check('drive: copia automática activada al conectar', await page.getByRole('switch', { name: /Copia automática al terminar/ }).isChecked());
+    await page.getByRole('button', { name: 'Guardar copia en Drive ahora' }).click();
+    check('drive: guarda la copia (crea el archivo)', (await has(page, 'Copia guardada en Drive')) && drive.files.size === 1 && drive.calls.includes('POST /upload/drive/v3/files'));
+    await shot(page, '35-drive-ajustes');
+
+    // Copia automática al terminar la sesión.
+    await page.getByRole('link', { name: 'Hoy' }).click();
+    await page.getByRole('button', { name: 'Comenzar' }).click();
+    await page.locator('.set').first().getByRole('button', { name: /marcar como hecha/ }).click();
+    await page.getByRole('button', { name: 'Lista de ejercicios' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Terminar' }).click();
+    await page.getByRole('dialog', { name: 'Terminar sesión' }).getByRole('button', { name: 'Terminar' }).click();
+    check('drive: copia automática al terminar la sesión', await waitFor(() => sessionsInDrive() === 1));
+    check('drive: no volvió a pedir permiso (vigente por una hora)', (await page.evaluate(() => window.__gis)) === 1);
+    await page.getByRole('dialog', { name: '¡Bien hecho!' }).getByRole('button', { name: 'Listo' }).click();
+
+    // Sin conexión: queda pendiente y se ofrece en Hoy.
+    drive.down = true;
+    await page.getByRole('button', { name: 'Hacer otra rutina hoy' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: /Rutina B/ }).click();
+    await page.getByRole('button', { name: 'Comenzar' }).click();
+    await page.locator('.set').first().getByRole('button', { name: /marcar como hecha/ }).click();
+    await page.getByRole('button', { name: 'Lista de ejercicios' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Terminar' }).click();
+    await page.getByRole('dialog', { name: 'Terminar sesión' }).getByRole('button', { name: 'Terminar' }).click();
+    await page.getByRole('dialog', { name: '¡Bien hecho!' }).getByRole('button', { name: 'Listo' }).click();
+    check('drive sin conexión: la sesión se guarda igual y la copia queda pendiente', await has(page, 'Copia en Drive pendiente', 'Sin conexión con Google Drive'));
+    drive.down = false;
+    await page.getByRole('button', { name: 'Subir ahora' }).click();
+    check('drive: «Subir ahora» completa la copia pendiente', (await has(page, 'Copia guardada en Drive.')) && sessionsInDrive() === 2);
+
+    // Restaurar desde Drive.
+    await page.getByRole('link', { name: 'Ajustes' }).click();
+    await page.getByRole('button', { name: 'Restaurar desde Drive' }).click();
+    const confirm = page.getByRole('dialog', { name: '¿Reemplazar tus datos con la copia de Drive?' });
+    check('drive: restaurar muestra qué trae la copia', (await confirm.innerText()).includes('5 rutinas'));
+    await confirm.getByRole('button', { name: 'Reemplazar' }).click();
+    check('drive: restaurado, y sigue conectado', (await has(page, 'Copia de Drive restaurada.')) && (await page.getByRole('button', { name: 'Guardar copia en Drive ahora' }).count()) === 1);
+    const real = errors.filter((e) => !e.includes('ERR_INTERNET_DISCONNECTED')); // los cortes simulados a propósito
+    check('drive: sin errores en consola', real.length === 0, real.join(' | '));
     await context.close();
   }
 

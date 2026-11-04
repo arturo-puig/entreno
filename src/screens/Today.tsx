@@ -22,6 +22,8 @@ import { useNow } from '../ui/useNow';
 import { CoachBubble } from '../ui/Coach';
 import { Celebration } from '../ui/Celebration';
 import { todayLine } from '../domain/coach';
+import { getDriveSettings } from '../db/drive';
+import { DriveUploadButton } from '../ui/DriveBackup';
 
 const LIGHT_ROUTINE_ID = 'cardio-movilidad';
 
@@ -31,11 +33,12 @@ export function Today() {
   const [picking, setPicking] = useState(false);
   const [logging, setLogging] = useState<string | null>(null);
   const [cheer, setCheer] = useState<string | null>(null);
+  const [driveSaved, setDriveSaved] = useState(false);
   const pwa = usePwa();
 
   const data = useLiveQuery(async () => {
     const monday = startOfWeek(now);
-    const [weekPlan, routines, day, sessions, exercises, logged, lastExport, snoozed] = await Promise.all([
+    const [weekPlan, routines, day, sessions, exercises, logged, lastExport, snoozed, drive] = await Promise.all([
       getWeekPlan(),
       db.routines.toArray(),
       db.days.get(iso),
@@ -44,18 +47,21 @@ export function Today() {
       db.sessions.where('source').equals('registro').count(),
       db.meta.get('lastExportAt'),
       db.meta.get('backupSnoozedUntil'),
+      getDriveSettings(),
     ]);
+    // La copia más reciente: descargada, compartida o en Drive.
+    const lastCopy = [lastExport?.value as string | undefined, drive.lastBackupAt].filter(Boolean).sort().pop();
     const backupDays = backupReminder({
       hasSessions: logged > 0,
-      lastExportAt: lastExport?.value as string | undefined,
+      lastExportAt: lastCopy,
       snoozedUntil: snoozed?.value as string | undefined,
       now: new Date(),
     });
-    return { weekPlan, routines, day, sessions, exercises, backupDays };
+    return { weekPlan, routines, day, sessions, exercises, backupDays, drive };
   }, [iso]);
 
   if (!data) return <Loading />;
-  const { weekPlan, routines, day, sessions, exercises, backupDays } = data;
+  const { weekPlan, routines, day, sessions, exercises, backupDays, drive } = data;
 
   const plan = planFor(weekPlan, now);
   const routine = routines.find((r) => r.id === effectiveRoutineId(plan, day));
@@ -100,7 +106,6 @@ export function Today() {
       : suggestedActivity && !todaysActivities.length
         ? [{ label: suggestedActivity === 'padel' ? 'Anotar pádel' : 'Anotar caminata', run: () => setLogging(suggestedActivity) }]
         : [];
-  const cardioRoutine = routine?.kind === 'cardio' && !routineSession ? { routineId: routine.id, name: routine.name } : undefined;
 
   const choose = async (r: Routine) => {
     await updateDayState(iso, { routineId: r.id === plan.routineId ? undefined : r.id, short: false });
@@ -240,7 +245,26 @@ export function Today() {
 
       <WeekStrip week={week} />
 
-      {backupDays !== null && (
+      {driveSaved && (
+        <p className="notice notice-accent" role="status">
+          <Icon name="check" size={18} /> Copia guardada en Drive.
+        </p>
+      )}
+
+      {drive.clientId && drive.pending && (
+        <div className="notice notice-warn backup-reminder">
+          <Icon name="download" size={18} />
+          <div>
+            <strong>Copia en Drive pendiente</strong>
+            <p>{drive.lastError ?? 'La última copia automática no se pudo hacer.'}</p>
+            <div className="notice-actions">
+              <DriveUploadButton clientId={drive.clientId} label="Subir ahora" onDone={() => setDriveSaved(true)} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {backupDays !== null && !(drive.clientId && drive.pending) && (
         <div className="notice notice-warn backup-reminder">
           <Icon name="download" size={18} />
           <div>
@@ -250,9 +274,13 @@ export function Today() {
               {backupDays === Infinity ? 'Todavía no hiciste ninguna copia.' : `Hace ${backupDays} días que no hacés una copia.`}
             </p>
             <div className="notice-actions">
-              <button className="btn btn-sm" onClick={() => downloadExport()}>
-                Exportar ahora
-              </button>
+              {drive.clientId ? (
+                <DriveUploadButton clientId={drive.clientId} onDone={() => setDriveSaved(true)} />
+              ) : (
+                <button className="btn btn-sm" onClick={() => downloadExport()}>
+                  Exportar ahora
+                </button>
+              )}
               <button className="btn btn-sm btn-ghost" onClick={() => snoozeBackupReminder()}>
                 Más tarde
               </button>
@@ -265,7 +293,9 @@ export function Today() {
         <ActivitySheet
           today={now}
           initial={logging}
-          cardioRoutine={cardioRoutine}
+          weekPlan={weekPlan}
+          routines={routines}
+          todayState={day}
           onClose={() => setLogging(null)}
           onSaved={(summary) => setCheer(summary)}
         />

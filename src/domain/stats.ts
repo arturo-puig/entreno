@@ -151,6 +151,23 @@ export const ACTIVITIES = [
   { exerciseId: 'trote', label: 'Trote' },
 ] as const;
 
+/** Actividades que pueden contar como la sesión de cardio del día. */
+export const CARDIO_LIKE: readonly string[] = ['caminata', 'bicicleta-exterior', 'trote'];
+
+/** Actividad que se registró en un toque (aunque ahora cuente como sesión de cardio). */
+export const isQuickActivity = (s: Session) => s.id.startsWith('a-');
+
+/**
+ * Pasa una actividad a contar como la sesión de cardio del día, o la vuelve a dejar como actividad aparte.
+ * Lo registrado (minutos, km, esfuerzo) no cambia.
+ */
+export function countActivityAs(s: Session, countAs: { routineId: string; name: string } | undefined): Session {
+  const label = ACTIVITIES.find((a) => a.exerciseId === s.items[0]?.exerciseId)?.label ?? s.name;
+  return countAs
+    ? { ...s, kind: 'entrenamiento', routineId: countAs.routineId, name: countAs.name }
+    : { ...s, kind: 'actividad', routineId: undefined, name: label };
+}
+
 export function createActivity(params: {
   exerciseId: string;
   name: string;

@@ -1,12 +1,22 @@
 import type { Exercise, LoggedSet, PlannedSet, Readiness, Routine, Session, SessionItem } from '../db/types';
 import { uid } from './edit';
+import { toISODate } from './dates';
 import { itemsForMode, setsForMode, type Mode } from './plan';
 
 /** Crea la sesión del día a partir de la rutina. Copia el plan: lo ejecutado se guarda aparte. */
-export function createSession(params: { routine: Routine; mode: Mode; readiness?: Readiness; date: string; now: Date }): Session {
-  const { routine, mode, readiness, date, now } = params;
+export function createSession(params: {
+  routine: Routine;
+  mode: Mode;
+  readiness?: Readiness;
+  date: string;
+  now: Date;
+  /** Sesión hecha en papel que cargás después (otra fecha, sin temporizadores). */
+  backfill?: boolean;
+}): Session {
+  const { routine, mode, readiness, date, now, backfill } = params;
   return {
     id: `s-${uid()}`,
+    ...(backfill ? { backfill: true } : {}),
     source: 'registro',
     date,
     name: routine.name,
@@ -42,9 +52,16 @@ export interface PreviousRecord {
  * Última vez que hiciste el ejercicio: primero sesiones registradas (la más reciente),
  * y si no hay, tus registros históricos como referencia.
  */
-export function previousRecord(sessions: Session[], exerciseId: string, excludeSessionId?: string): PreviousRecord | undefined {
+export function previousRecord(
+  sessions: Session[],
+  exerciseId: string,
+  excludeSessionId?: string,
+  /** Para sesiones cargadas después: solo cuenta lo hecho hasta esa fecha. */
+  until?: string,
+): PreviousRecord | undefined {
   const withExercise = (s: Session) =>
     s.id !== excludeSessionId &&
+    (!until || !s.date || s.date <= until) &&
     s.status !== 'en-curso' &&
     s.items.some((i) => i.exerciseId === exerciseId && !i.skipped && i.sets.some((x) => x.done));
   const pick = (s: Session, isHistoric: boolean): PreviousRecord => {
@@ -140,7 +157,7 @@ export function summarize(session: Session, now = new Date()): SessionSummary {
     exercisesDone: session.items.filter((i) => !i.skipped && i.sets.some((s) => s.done)).length,
     exercisesTotal: session.items.length,
     skipped: session.items.filter((i) => i.skipped).length,
-    minutes: session.startedAt ? Math.max(0, Math.round((end.getTime() - new Date(session.startedAt).getTime()) / 60000)) : undefined,
+    minutes: session.startedAt && !session.backfill ? Math.max(0, Math.round((end.getTime() - new Date(session.startedAt).getTime()) / 60000)) : undefined,
   };
 }
 
@@ -149,7 +166,12 @@ export function summarize(session: Session, now = new Date()): SessionSummary {
  * (si registraste algo) o se descartan (si estaban vacías). Nada se arrastra como deuda.
  */
 export function staleSessions(sessions: Session[], today: string): { close: Session[]; discard: Session[] } {
-  const stale = sessions.filter((s) => s.source === 'registro' && s.status === 'en-curso' && s.date !== null && s.date < today);
+  // Las cargadas en papel se miden por el día en que empezaste a cargarlas, no por su fecha.
+  const day = (s: Session) => (s.backfill && s.startedAt ? toISODate(new Date(s.startedAt)) : s.date);
+  const stale = sessions.filter((s) => {
+    const d = day(s);
+    return s.source === 'registro' && s.status === 'en-curso' && d !== null && d < today;
+  });
   const hasData = (s: Session) => s.items.some((i) => i.sets.some((x) => x.done));
   return { close: stale.filter(hasData), discard: stale.filter((s) => !hasData(s)) };
 }
@@ -182,4 +204,32 @@ export function formatClock(ms: number): string {
   const m = Math.floor(total / 60);
   const s = total % 60;
   return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+// ——— Máquina ocupada: cambiar a otro ejercicio solo en esta sesión ———
+
+/**
+ * Cambia el ejercicio de la sesión (respaldo o sustitución) manteniendo las series planificadas.
+ * Si elegís el original, vuelve a como estaba en el plan. Lo registrado de ese ejercicio se borra.
+ */
+export function substituteItem(item: SessionItem, exerciseId: string): SessionItem {
+  if (exerciseId === item.exerciseId) return item;
+  const original = item.substitutedFrom ?? item.exerciseId;
+  const back = exerciseId === original;
+  return {
+    ...item,
+    exerciseId,
+    substitutedFrom: back ? undefined : original,
+    variant: back ? item.plan?.variant : undefined,
+    sets: item.sets.map((x) => ({ done: false, ...(x.planned ? { planned: x.planned } : {}) })),
+  };
+}
+
+/**
+ * Ejercicio de respaldo disponible para este ítem, si no lo estás usando ya.
+ * `current` es el respaldo que tiene hoy la rutina (puede haberse elegido durante la sesión).
+ */
+export function backupFor(item: SessionItem, current?: string): string | undefined {
+  const id = current ?? item.plan?.backupExerciseId;
+  return id && id !== item.exerciseId && !item.substitutedFrom ? id : undefined;
 }

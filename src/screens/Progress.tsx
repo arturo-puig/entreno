@@ -12,6 +12,7 @@ import { Badge, ConfirmSheet, EmptyState, Loading, parseNumber, ScreenHeader } f
 import { ColumnChart, Legend, LineChart, SERIES_ACCENT, SERIES_MUTED, type LineSeries } from '../ui/charts';
 import { Icon } from '../ui/Icon';
 import { useNow } from '../ui/useNow';
+import { BackfillSheet } from '../ui/BackfillSheet';
 
 const ms = (iso: string) => parseISODate(iso).getTime();
 const shortDate = (v: number) => {
@@ -32,16 +33,18 @@ const METRIC_TEXT: Record<MetricKind, string> = {
 export function Progress() {
   const now = useNow();
   const data = useLiveQuery(async () => {
-    const [sessions, exercises, weekPlan, metrics] = await Promise.all([
+    const [sessions, exercises, weekPlan, metrics, routines] = await Promise.all([
       db.sessions.toArray(),
       db.exercises.toArray(),
       getWeekPlan(),
       db.bodyMetrics.orderBy('date').toArray(),
+      db.routines.toArray(),
     ]);
-    return { sessions, exercises, weekPlan, metrics };
+    return { sessions, exercises, weekPlan, metrics, routines };
   });
+  const [backfilling, setBackfilling] = useState(false);
   if (!data) return <Loading />;
-  const { sessions, exercises, weekPlan, metrics } = data;
+  const { sessions, exercises, weekPlan, metrics, routines } = data;
   const nameOf = new Map(exercises.map((e) => [e.id, e.name]));
   const logged = sessions
     .filter((s) => s.source === 'registro')
@@ -63,16 +66,22 @@ export function Progress() {
 
       {logged.length > 0 && <ExerciseEvolution sessions={sessions} exercises={exercises} />}
 
-      {logged.length > 0 && (
-        <section className="section">
-          <h2 className="section-title">Tus sesiones</h2>
+      <section className="section">
+        <h2 className="section-title">Tus sesiones</h2>
+        {logged.length > 0 && (
           <ul className="list">
             {logged.map((s) => (
               <SessionRow key={s.id} s={s} nameOf={nameOf} />
             ))}
           </ul>
-        </section>
-      )}
+        )}
+        <button className="btn btn-block section-action" onClick={() => setBackfilling(true)}>
+          <Icon name="edit" size={18} /> Cargar una sesión hecha en papel
+        </button>
+        {logged.length > 0 && <p className="hint">Para cambiar la fecha o borrar una sesión: abrila y tocá la lista (arriba a la derecha).</p>}
+      </section>
+
+      {backfilling && <BackfillSheet routines={routines} weekPlan={weekPlan} now={now} onClose={() => setBackfilling(false)} />}
 
       {historic.length > 0 && (
         <section className="section">

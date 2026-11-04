@@ -1,23 +1,37 @@
 import { useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../db/db';
 import { logActivity } from '../db/actions';
+import type { DayPlan, DayState, Routine } from '../db/types';
+import { cardioRoutineOn } from '../domain/schedule';
 import { addDays, toISODate } from '../domain/dates';
-import { ACTIVITIES } from '../domain/stats';
+import { ACTIVITIES, CARDIO_LIKE } from '../domain/stats';
 import { Field, parseNumber, Sheet, Switch } from './common';
 
 /** Registrar pádel, bici, caminata o trote en un toque. Todo es opcional salvo el tipo. */
-const CARDIO_LIKE = ['caminata', 'bicicleta-exterior', 'trote'];
-
 export function ActivitySheet(props: {
   today: Date;
   initial?: string;
   onClose: () => void;
-  /** El día toca una rutina de cardio: la actividad puede contar como esa sesión. */
-  cardioRoutine?: { routineId: string; name: string };
+  /** Para saber si ese día tocaba una rutina de cardio: la actividad puede contar como esa sesión. */
+  weekPlan?: DayPlan[];
+  routines?: Routine[];
+  /** Lo que elegiste para hoy (si cambiaste la rutina del día). */
+  todayState?: DayState;
   onSaved?: (summary: string) => void;
 }) {
-  const { today, initial, onClose, cardioRoutine } = props;
+  const { today, initial, onClose } = props;
+  const todayIso = toISODate(today);
   const [type, setType] = useState<string>(initial ?? ACTIVITIES[0].exerciseId);
-  const [when, setWhen] = useState<'hoy' | 'ayer'>('hoy');
+  const [when, setWhen] = useState<'hoy' | 'ayer' | 'otro'>('hoy');
+  const [other, setOther] = useState(toISODate(addDays(today, -2)));
+  const date = when === 'hoy' ? todayIso : when === 'ayer' ? toISODate(addDays(today, -1)) : other;
+  const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date) && date <= todayIso;
+  const sameDay = useLiveQuery(() => (validDate ? db.sessions.where('date').equals(date).toArray() : []), [date, validDate]);
+  const cardioRoutine =
+    validDate && sameDay && props.weekPlan && props.routines
+      ? cardioRoutineOn({ date, weekPlan: props.weekPlan, routines: props.routines, sessions: sameDay, day: date === todayIso ? props.todayState : undefined })
+      : undefined;
   const [minutes, setMinutes] = useState('');
   const [km, setKm] = useState('');
   const [effort, setEffort] = useState<number>();
@@ -25,7 +39,7 @@ export function ActivitySheet(props: {
   const [busy, setBusy] = useState(false);
   const [countAs, setCountAs] = useState(true);
   const activity = ACTIVITIES.find((a) => a.exerciseId === type)!;
-  const canCount = !!cardioRoutine && CARDIO_LIKE.includes(type) && when === 'hoy';
+  const canCount = !!cardioRoutine && CARDIO_LIKE.includes(type);
 
   const save = async () => {
     setBusy(true);
@@ -34,7 +48,7 @@ export function ActivitySheet(props: {
     await logActivity({
       exerciseId: type,
       name: activity.label,
-      date: toISODate(when === 'hoy' ? today : addDays(today, -1)),
+      date,
       minutes: m,
       km: k,
       effort,
@@ -55,7 +69,7 @@ export function ActivitySheet(props: {
           <button className="btn" onClick={onClose} disabled={busy}>
             Cancelar
           </button>
-          <button className="btn btn-primary" onClick={save} disabled={busy}>
+          <button className="btn btn-primary" onClick={save} disabled={busy || !validDate}>
             Guardar
           </button>
         </div>
@@ -75,12 +89,20 @@ export function ActivitySheet(props: {
         <button className="chip-btn" aria-pressed={when === 'ayer'} onClick={() => setWhen('ayer')}>
           Ayer
         </button>
+        <button className="chip-btn" aria-pressed={when === 'otro'} onClick={() => setWhen('otro')}>
+          Otro día
+        </button>
       </div>
+      {when === 'otro' && (
+        <Field label="Fecha">
+          <input className="input" type="date" value={other} max={todayIso} onChange={(e) => setOther(e.target.value)} />
+        </Field>
+      )}
       {canCount && (
         <Switch
           checked={countAs}
           onChange={setCountAs}
-          label={`Cuenta como ${cardioRoutine!.name} de hoy`}
+          label={`Cuenta como ${cardioRoutine!.name} de ${when === 'hoy' ? 'hoy' : when === 'ayer' ? 'ayer' : 'ese día'}`}
           description="Suma como la sesión planificada del día, no como actividad aparte."
         />
       )}

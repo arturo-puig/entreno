@@ -103,6 +103,8 @@ export interface RoutineItem {
   /** Pregunta pendiente de confirmar. Mientras exista, el ítem se muestra como pendiente. */
   pending?: string;
   note?: string;
+  /** Ejercicio de respaldo para cuando la máquina está ocupada (mismas series y repeticiones). */
+  backupExerciseId?: string;
 }
 
 export interface Routine {
@@ -203,6 +205,8 @@ export interface Session {
   items: SessionItem[];
   /** Ejercicio que estabas mirando (para retomar donde dejaste). */
   currentIndex?: number;
+  /** Sesión hecha en papel y cargada después: sin temporizadores ni coach. */
+  backfill?: boolean;
   /** Fin del descanso en curso (hora absoluta: no se desfasa si la pantalla se apaga). */
   restEndsAt?: string;
   work?: WorkTimer;
@@ -233,6 +237,8 @@ export interface Prefs {
   vibrate: boolean;
   sound: boolean;
   rpe: boolean;
+  /** Destello de pantalla al terminar el descanso (gimnasios ruidosos). */
+  flash: boolean;
 }
 
 export interface MetaEntry {
