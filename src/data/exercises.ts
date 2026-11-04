@@ -41,13 +41,15 @@ export const EXERCISES: Exercise[] = [
     equipment: ['Banda elástica'],
     movement: 'Movilidad',
     instructions: [
-      'Pisá la banda con el pie derecho.',
-      'Con la mano derecha, levantá la banda manteniendo el codo alineado con el hombro.',
-      'Hacé las repeticiones y cambiá de lado.',
+      'Pisá la banda con el pie derecho y tomala con la mano derecha.',
+      'Subí el codo hasta la altura del hombro, con el brazo al costado y el codo doblado a 90°: la mano apunta hacia adelante.',
+      'Sin mover el codo, girá el brazo para llevar la mano hacia arriba (rotación externa) y bajala de forma controlada.',
+      'Hacé las repeticiones y repetí del lado izquierdo, pisando la banda con el pie izquierdo.',
     ],
     instructionsNote:
-      'Pasos 1 y 2: según tu descripción. El paso 3 (cambiar de lado) es una suposición: corregilo si no corresponde.',
+      'Según tu descripción. «Brazo al costado» se deduce de que la mano gira de apuntar adelante a apuntar arriba; si tu profe lo marcó distinto, corregilo.',
     commonErrors: [
+      'Bajar el codo mientras girás la mano.',
       'Subir el hombro hacia la oreja.',
       'Usar una banda tan dura que pierdas la posición del codo.',
       'Hacerlo rápido: es un ejercicio de control.',

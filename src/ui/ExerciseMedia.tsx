@@ -37,7 +37,7 @@ export function ExerciseMedia({ exercise, preferredVariant }: { exercise: Exerci
       ...illustrationsFor(exercise.id).map((ill) => ({
         key: ill.sourceId,
         kind: 'ilustracion' as const,
-        label: ill.kind === 'fotos' ? 'Fotos' : 'Ilustración',
+        label: ill.kind === 'fotos' ? 'Fotos' : ill.source === 'ia' ? 'Ilustración IA' : 'Ilustración',
         variant: ill.variant,
         ill,
       })),
@@ -174,11 +174,19 @@ function IllustrationPlayer({ ill, name }: { ill: Illustration; name: string }) 
     return () => window.clearTimeout(id);
   }, [playing, frame, ill.frameMs, n]);
 
-  const what = ill.kind === 'fotos' ? 'fotos' : 'ilustración';
+  const what = ill.kind === 'fotos' ? 'fotos' : ill.source === 'ia' ? 'ilustración generada con IA' : 'ilustración';
+  // Lo generado con IA lleva el rótulo sobre la imagen: nunca se confunde con una demostración.
+  const tag = ill.source === 'ia' && <span className="media-tag">Generada con IA</span>;
   if (n === 1)
     return (
       <div className="media-illustration">
-        <img src={ill.frames[0]} alt={`${name}: ilustración de la posición`} className="is-visible" draggable={false} />
+        <img
+          src={ill.frames[0]}
+          alt={`${name}: ${what}, ${ill.sideBySide ? 'las dos posiciones una al lado de la otra' : 'la posición'}`}
+          className="is-visible"
+          draggable={false}
+        />
+        {tag}
       </div>
     );
   return (
@@ -195,6 +203,7 @@ function IllustrationPlayer({ ill, name }: { ill: Illustration; name: string }) 
       <span className="media-badge" aria-hidden="true">
         {frame + 1}/{n}
       </span>
+      {tag}
       <button className="media-ctrl" onClick={() => setPlaying((p) => !p)}>
         {playing ? 'Pausar' : 'Animar'}
       </button>
@@ -243,23 +252,32 @@ function MediaCaption({ entry, onDelete }: { entry: Entry; onDelete: () => void 
       <span>
         {entry.ill.kind === 'fotos'
           ? `Secuencia de ${entry.ill.frames.length} fotos del movimiento (no es un video)`
-          : entry.ill.frames.length === 1
-            ? 'Ilustración de la posición (no es un video)'
-            : 'Ilustración de las dos posiciones del movimiento (no es un video)'}
+          : entry.ill.sideBySide
+            ? 'Ilustración de las dos posiciones del movimiento, una al lado de la otra (no es un video)'
+            : entry.ill.frames.length === 1
+              ? 'Ilustración de la posición (no es un video)'
+              : 'Ilustración de las dos posiciones del movimiento (no es un video)'}
         {entry.variant && <> · <strong>{entry.variant}</strong></>}.
       </span>
       {entry.ill.caption && <span>{entry.ill.caption}</span>}
-      <span className="credit">
-        <a href={c.sourceUrl} target="_blank" rel="noopener noreferrer">
-          {c.name}
-        </a>{' '}
-        ({c.authors}) ·{' '}
-        <a href={c.licenseUrl} target="_blank" rel="noopener noreferrer">
-          {c.license}
-        </a>{' '}
-        · {c.changes === 'Sin cambios.' ? 'sin cambios' : 'adaptada'}
-        {c.note ? `. ${c.note}` : ''}
-      </span>
+      {entry.ill.source === 'ia' ? (
+        <span className="credit">
+          Generada con IA a tu pedido y revisada a ojo: es orientativa, no una demostración real. Si algo difiere de lo que te marcó tu profe, vale lo
+          de tu profe.
+        </span>
+      ) : (
+        <span className="credit">
+          <a href={c.sourceUrl} target="_blank" rel="noopener noreferrer">
+            {c.name}
+          </a>{' '}
+          ({c.authors}) ·{' '}
+          <a href={c.licenseUrl} target="_blank" rel="noopener noreferrer">
+            {c.license}
+          </a>{' '}
+          · {c.changes === 'Sin cambios.' ? 'sin cambios' : 'adaptada'}
+          {c.note ? `. ${c.note}` : ''}
+        </span>
+      )}
     </div>
   );
 }

@@ -1,0 +1,18 @@
+Dibujos generados con IA (ChatGPT o Gemini) por el usuario de la app, a partir de pedidos escritos
+para cada ejercicio (dos paneles: inicio | final, mismo encuadre, sin texto). Uso personal.
+No son demostraciones: la app los muestra siempre con el rótulo «Generada con IA» y la aclaración
+de que son orientativos (si algo difiere de lo que marcó el profe, vale lo del profe).
+
+Revisión a ojo, uno por uno (noviembre de 2026):
+- pallof-press-a.png / -b.png: Pallof press en polea, de pie de costado a la polea, agarre a la altura
+  del pecho; brazos al pecho → brazos extendidos sin girar el tronco. Máquina y pies coinciden entre
+  paneles (±2 px), así que se animan alternando las dos posiciones.
+- sentadilla-bulgara.png: empeine de atrás en un banco plano, dos mancuernas, arriba → abajo con la
+  rodilla de atrás cerca del piso. El pie de adelante aparece ~43 px más adelante en el segundo panel:
+  animado parecería que el pie se desliza, por eso se muestra fija con los dos paneles juntos.
+
+Descartadas: tres imágenes del manguito rotador (una con el brazo estirado al frente en lugar del codo
+a 90°, otra con músculos dibujados sobre el hombro y una mano abierta, otra con texto y una segunda banda).
+
+Cambios: paneles separados por la línea divisoria, recortados y alineados (scripts/media/ia.py),
+fondo limpiado y pasado a 32 tonos de gris.

@@ -35,7 +35,7 @@ export class EntrenoDB extends Dexie {
 export const db = new EntrenoDB();
 
 /** Subir este número cuando se agreguen ejercicios, rutinas o variantes a la carga inicial. */
-export const SEED_REVISION = 3;
+export const SEED_REVISION = 4;
 
 /**
  * Agrega lo que falte de la carga inicial sin pisar nada que ya exista,
@@ -51,6 +51,7 @@ export async function ensureSeed(database: EntrenoDB = db): Promise<void> {
     async () => {
       await addMissing(database.exercises, EXERCISES);
       await mergeVariants(database, EXERCISES);
+      await refreshSeedTexts(database, EXERCISES);
       await addMissing(database.routines, ROUTINES);
       await addMissing(database.sessions, HISTORY);
       if (!(await database.meta.get('weekPlan'))) {
@@ -75,6 +76,39 @@ async function mergeVariants(database: EntrenoDB, seed: Exercise[]) {
     if (!current) continue;
     const merged = [...new Set([...(current.variants ?? []), ...e.variants])];
     if (merged.length !== (current.variants ?? []).length) await database.exercises.update(e.id, { variants: merged });
+  }
+}
+
+/**
+ * Textos de la carga inicial que se corrigieron después (con datos tuyos). Se guarda la versión anterior:
+ * si el ejercicio todavía la tiene tal cual, pasa a la nueva; si la editaste, no se toca.
+ */
+const PREVIOUS_SEED_TEXT: Record<string, Pick<Exercise, 'instructions' | 'instructionsNote' | 'commonErrors'>> = {
+  'manguito-rotador-banda': {
+    instructions: [
+      'Pisá la banda con el pie derecho.',
+      'Con la mano derecha, levantá la banda manteniendo el codo alineado con el hombro.',
+      'Hacé las repeticiones y cambiá de lado.',
+    ],
+    instructionsNote: 'Pasos 1 y 2: según tu descripción. El paso 3 (cambiar de lado) es una suposición: corregilo si no corresponde.',
+    commonErrors: [
+      'Subir el hombro hacia la oreja.',
+      'Usar una banda tan dura que pierdas la posición del codo.',
+      'Hacerlo rápido: es un ejercicio de control.',
+    ],
+  },
+};
+
+async function refreshSeedTexts(database: EntrenoDB, seed: Exercise[]) {
+  const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+  for (const [id, prev] of Object.entries(PREVIOUS_SEED_TEXT)) {
+    const current = await database.exercises.get(id);
+    const next = seed.find((e) => e.id === id);
+    if (!current || !next) continue;
+    const untouched =
+      same(current.instructions, prev.instructions) && same(current.instructionsNote, prev.instructionsNote) && same(current.commonErrors, prev.commonErrors);
+    if (untouched)
+      await database.exercises.update(id, { instructions: next.instructions, instructionsNote: next.instructionsNote, commonErrors: next.commonErrors });
   }
 }
 

@@ -6,8 +6,10 @@
 //   fotos producidas por el propio Ejército, obra del gobierno federal de EE.UU. → dominio público.
 //   «Approved for public release; distribution unlimited». Se recortaron de las secuencias del manual.
 // - Wikimedia Commons: archivos sueltos, cada uno con su autor y licencia (van en `credit`).
+// - IA: dibujos que el usuario generó con ChatGPT o Gemini a partir de un pedido preciso. Se revisan a ojo
+//   uno por uno y se muestran siempre rotulados como «Generada con IA» y orientativos (nunca como demostración).
 
-export type MediaSource = 'everkinetic' | 'ejercito' | 'commons';
+export type MediaSource = 'everkinetic' | 'ejercito' | 'commons' | 'ia';
 
 export interface Illustration {
   /** Identificador único (archivo de origen) */
@@ -21,6 +23,8 @@ export interface Illustration {
   frameMs: number;
   variant?: string;
   caption?: string;
+  /** Una sola imagen con las dos posiciones una al lado de la otra (se muestra fija). */
+  sideBySide?: boolean;
   /** Crédito propio del archivo (Commons); si no, el de la fuente. */
   credit?: MediaCredit;
 }
@@ -29,8 +33,8 @@ export interface MediaCredit {
   name: string;
   authors: string;
   license: string;
-  licenseUrl: string;
-  sourceUrl: string;
+  licenseUrl?: string;
+  sourceUrl?: string;
   changes: string;
   note?: string;
 }
@@ -61,6 +65,13 @@ export const CREDITS: Record<MediaSource, MediaCredit> = {
     sourceUrl: 'https://commons.wikimedia.org/',
     changes: '',
   },
+  ia: {
+    name: 'Generada con IA',
+    authors: 'a pedido del usuario, con ChatGPT o Gemini',
+    license: 'Uso personal',
+    changes: 'Paneles separados (o juntados) y alineados; fondo limpiado y pasado a grises.',
+    note: 'Revisada a ojo; es orientativa, no una demostración.',
+  },
 };
 
 export const creditFor = (ill: Illustration): MediaCredit => ill.credit ?? CREDITS[ill.source];
@@ -87,7 +98,21 @@ const army = (figure: string, count: number, extra: Partial<Pick<Illustration, '
   ...extra,
 });
 
-// En cada ejercicio, primero las fotos reales (si hay) y después el dibujo.
+/** Dibujo generado con IA (archivos en `media/ia/`, detalle en su LEEME). */
+const ia = (
+  sourceId: string,
+  frames: string[],
+  extra: Partial<Pick<Illustration, 'variant' | 'caption' | 'sideBySide'>> = {},
+): Illustration => ({
+  sourceId: `ia-${sourceId}`,
+  source: 'ia',
+  kind: 'dibujo',
+  frames: frames.map((f) => `media/ia/${f}`),
+  frameMs: 1300,
+  ...extra,
+});
+
+// En cada ejercicio, primero las fotos reales (si hay), después los dibujos con licencia y al final los de IA.
 export const ILLUSTRATIONS: Record<string, Illustration[]> = {
   'sentadilla-smith': [ek('0124')],
   'remo-al-menton': [
@@ -140,6 +165,18 @@ export const ILLUSTRATIONS: Record<string, Illustration[]> = {
     army('5-17', 11, {
       frameMs: 380,
       caption: 'Sin carga. Con mancuerna(s) o barra el movimiento es el mismo: la carga se mantiene cerca del cuerpo.',
+    }),
+  ],
+  'pallof-press': [
+    ia('pallof-press', ['pallof-press-a.png', 'pallof-press-b.png'], {
+      variant: 'En polea',
+      caption: 'Con banda elástica es igual: atala a la altura del pecho, a un costado. Hacelo de los dos lados.',
+    }),
+  ],
+  'sentadilla-bulgara': [
+    ia('sentadilla-bulgara', ['sentadilla-bulgara.png'], {
+      sideBySide: true,
+      caption: 'Izquierda: arriba. Derecha: abajo, con la rodilla de atrás cerca del piso sin tocarlo. Muestra dos mancuernas; el pie de adelante no se mueve durante la serie.',
     }),
   ],
 };

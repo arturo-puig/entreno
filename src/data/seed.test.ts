@@ -94,4 +94,33 @@ describe('actualización de la carga inicial', () => {
     expect((await db.exercises.get('remo-al-menton'))?.variants).toEqual(['Mi variante', 'Con barra', 'En polea', 'Con mancuernas']);
     db.close();
   });
+
+  it('actualiza un texto corregido solo si no lo editaste', async () => {
+    const seedManguito = EXERCISES.find((e) => e.id === 'manguito-rotador-banda')!;
+    const old = {
+      instructions: [
+        'Pisá la banda con el pie derecho.',
+        'Con la mano derecha, levantá la banda manteniendo el codo alineado con el hombro.',
+        'Hacé las repeticiones y cambiá de lado.',
+      ],
+      instructionsNote: 'Pasos 1 y 2: según tu descripción. El paso 3 (cambiar de lado) es una suposición: corregilo si no corresponde.',
+      commonErrors: ['Subir el hombro hacia la oreja.', 'Usar una banda tan dura que pierdas la posición del codo.', 'Hacerlo rápido: es un ejercicio de control.'],
+    };
+    // Celular con la versión anterior, sin tocar → pasa a la nueva.
+    const a = new EntrenoDB(`test-${Math.random()}`);
+    await ensureSeed(a);
+    await a.exercises.update('manguito-rotador-banda', old);
+    await a.meta.put({ key: 'seedRevision', value: 3 });
+    await ensureSeed(a);
+    expect((await a.exercises.get('manguito-rotador-banda'))?.instructions).toEqual(seedManguito.instructions);
+    a.close();
+    // Celular donde lo editaste → queda tu texto.
+    const b = new EntrenoDB(`test-${Math.random()}`);
+    await ensureSeed(b);
+    await b.exercises.update('manguito-rotador-banda', { ...old, instructions: ['Mi versión'] });
+    await b.meta.put({ key: 'seedRevision', value: 3 });
+    await ensureSeed(b);
+    expect((await b.exercises.get('manguito-rotador-banda'))?.instructions).toEqual(['Mi versión']);
+    b.close();
+  });
 });

@@ -1552,6 +1552,20 @@ select.input {
   font-variant-numeric: tabular-nums;
 }
 
+/* Rótulo fijo sobre lo generado con IA. */
+.media-tag {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(18, 19, 21, 0.75);
+  color: #eceef1;
+  font-size: 12px;
+  font-weight: 650;
+  pointer-events: none;
+}
+
 .media-ctrl {
   position: absolute;
   right: 10px;

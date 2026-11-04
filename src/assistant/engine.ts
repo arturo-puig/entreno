@@ -222,7 +222,16 @@ export function respond(
       const own = ctx.ownMedia.has(e.id);
       const ills = illustrationsFor(e.id).length;
       const photos = illustrationsFor(e.id).some((i) => i.kind === 'fotos');
-      const media = own ? 'Tenés un video o foto tuyo.' : photos ? 'Tiene fotos del movimiento.' : ills ? 'Tiene ilustración.' : 'Todavía no tiene video ni ilustración: podés grabar uno.';
+      const onlyAi = ills > 0 && illustrationsFor(e.id).every((i) => i.source === 'ia');
+      const media = own
+        ? 'Tenés un video o foto tuyo.'
+        : photos
+          ? 'Tiene fotos del movimiento.'
+          : onlyAi
+            ? 'Tiene una ilustración generada con IA (orientativa).'
+            : ills
+              ? 'Tiene ilustración.'
+              : 'Todavía no tiene video ni ilustración: podés grabar uno.';
       return {
         ...base,
         exerciseId: e.id,

@@ -216,6 +216,28 @@ try {
       (await has(page, 'Ilustración de la posición', 'Pk0001', 'CC BY-SA 4.0')) && (await page.getByRole('button', { name: 'Pausar', exact: true }).count()) === 0,
     );
 
+    // Dibujos generados con IA a pedido del usuario: rótulo sobre la imagen y aclaración en el texto.
+    await go('#/ejercicios/pallof-press', 'Cómo se hace');
+    const aiImg = page.locator('.media-illustration img.is-visible');
+    await aiImg.waitFor();
+    check(
+      'IA: Pallof animado, con rótulo sobre la imagen y aclaración',
+      (await aiImg.evaluate((el) => el.complete && el.naturalWidth > 0 && el.src.includes('media/ia/pallof-press'))) &&
+        (await page.locator('.media-tag', { hasText: 'Generada con IA' }).isVisible()) &&
+        (await has(page, 'no una demostración', 'vale lo de tu profe', 'En polea')) &&
+        (await page.getByRole('button', { name: 'Pausar', exact: true }).isVisible()),
+    );
+    await shot(page, '37-ia-pallof');
+    await go('#/ejercicios/sentadilla-bulgara', 'Cómo se hace');
+    await page.locator('.media-illustration img.is-visible').waitFor();
+    check(
+      'IA: búlgara fija con las dos posiciones lado a lado',
+      (await has(page, 'una al lado de la otra', 'Izquierda: arriba')) &&
+        (await page.locator('.media-tag').isVisible()) &&
+        (await page.getByRole('button', { name: 'Pausar', exact: true }).count()) === 0,
+    );
+    await shot(page, '38-ia-bulgara');
+
     // Sin ilustración: aviso honesto + agregar video/foto propio.
     await go('#/ejercicios/hip-thrust-maquina', 'Cómo se hace');
     check('sin ilustración: aviso honesto', await has(page, 'Todavía no hay video ni ilustración'));
