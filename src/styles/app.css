@@ -880,6 +880,11 @@ button.row:active {
   overflow: hidden;
 }
 
+/* Dos posiciones una arriba de la otra: recuadro cuadrado para que se vean grandes. */
+.media.is-square {
+  aspect-ratio: 1 / 1;
+}
+
 .media-empty {
   display: flex;
   flex-direction: column;
@@ -1552,7 +1557,11 @@ select.input {
   font-variant-numeric: tabular-nums;
 }
 
-/* Rótulo fijo sobre lo generado con IA. */
+/* Rótulo fijo sobre lo generado con IA (con lugar arriba para que no tape la imagen). */
+.media-illustration.has-tag img {
+  padding-top: 42px;
+}
+
 .media-tag {
   position: absolute;
   right: 10px;

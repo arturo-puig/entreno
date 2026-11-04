@@ -228,7 +228,7 @@ export function respond(
         : photos
           ? 'Tiene fotos del movimiento.'
           : onlyAi
-            ? 'Tiene una ilustración generada con IA (orientativa).'
+            ? 'Tiene una imagen generada con IA (orientativa).'
             : ills
               ? 'Tiene ilustración.'
               : 'Todavía no tiene video ni ilustración: podés grabar uno.';

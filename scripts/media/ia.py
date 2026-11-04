@@ -6,11 +6,17 @@ Cada original trae dos paneles (inicio | final) separados por una línea vertica
   el pie se desliza); se arma una sola imagen con los dos paneles juntos, que se muestra fija.
 
 - Sentadilla isométrica contra la pared: una sola posición → se recorta y se muestra fija.
+- Rueda abdominal: la colchoneta cambia de largo entre paneles → fija; como cada panel es muy ancho,
+  van uno arriba del otro (se ven el doble de grandes en el celular).
+- Hip thrust en máquina (imagen fotorrealista, con títulos arriba): se recorta debajo de los títulos;
+  máquina y fondo coinciden entre paneles → dos cuadros en color (JPEG) que se animan.
 
 Uso:
   python3 -I scripts/media/ia.py pallof <pallof.jpg> <carpeta de salida>
-  python3 -I scripts/media/ia.py bulgara <bulgara.jpg> <carpeta de salida>
+  python3 -I scripts/media/ia.py juntos <imagen.jpg> <carpeta de salida> <nombre>
+  python3 -I scripts/media/ia.py apiladas <imagen.jpg> <carpeta de salida> <nombre>
   python3 -I scripts/media/ia.py unica <imagen.jpg> <carpeta de salida> <nombre>
+  python3 -I scripts/media/ia.py foto <imagen.jpg> <carpeta de salida> <nombre> <x0> <y0> <x1> <y1>
 """
 import sys
 
@@ -39,11 +45,12 @@ def save(arr, path):
 
 
 def split(im):
-    """Separa los paneles en la línea divisoria (la columna más oscura cerca del centro)."""
+    """Separa los paneles en la línea divisoria: en el tercio central, la columna con más filas no blancas
+    (la línea cruza casi toda la altura; el dibujo no). No siempre está en el centro exacto."""
     h, w = im.shape
-    c = w // 2
-    cols = im[:, c - 40 : c + 40].mean(axis=0)
-    div = c - 40 + int(np.argmin(cols))
+    x0 = w // 3
+    cover = (im[:, x0 : 2 * w // 3] < 235).mean(axis=0)
+    div = x0 + int(np.argmax(cover))
     return im[:, : div - 1], im[:, div + 2 :]
 
 
@@ -82,7 +89,8 @@ def pallof(path, out):
     save(b[y0:y1, x0:x1], f'{out}/pallof-press-b.png')
 
 
-def bulgara(path, out):
+def juntos(path, out, name):
+    """Dos paneles que no coinciden: una sola imagen con los dos juntos (se muestra fija)."""
     left, right = split(load(path))
     m = 16
     parts = []
@@ -102,7 +110,28 @@ def bulgara(path, out):
         if i == 0:
             canvas[m : y1 - y0 - m, x + gap // 2 - 1 : x + gap // 2 + 1] = 200  # línea divisoria gris clara
             x += gap
-    save(canvas, f'{out}/sentadilla-bulgara.png')
+    save(canvas, f'{out}/{name}.png')
+
+
+def apiladas(path, out, name):
+    """Dos paneles anchos que no coinciden: uno arriba del otro, alineados a la izquierda (así pies y
+    rodillas, que no se mueven, quedan en la misma vertical), en una sola imagen fija."""
+    left, right = split(load(path))
+    m, gap = 16, 28
+    crops = []
+    for p in (left, right):
+        x0, x1, y0, y1 = bbox(p)
+        crops.append(p[max(0, y0 - m) : y1 + m, max(0, x0 - m) : x1 + m])
+    width = max(c.shape[1] for c in crops)
+    canvas = np.full((sum(c.shape[0] for c in crops) + gap, width), 255, dtype=np.int16)
+    y = 0
+    for i, c in enumerate(crops):
+        canvas[y : y + c.shape[0], : c.shape[1]] = c
+        y += c.shape[0]
+        if i == 0:
+            canvas[y + gap // 2 - 1 : y + gap // 2 + 1, m : width - m] = 200  # línea divisoria gris clara
+            y += gap
+    save(canvas, f'{out}/{name}.png')
 
 
 def unica(path, out, name):
@@ -113,6 +142,26 @@ def unica(path, out, name):
     save(im[max(0, y0 - m) : y1 + m, max(0, x0 - m) : x1 + m], f'{out}/{name}.png')
 
 
+def foto(path, out, name, x0, y0, x1, y1):
+    """Imagen fotorrealista en color: recorta la misma zona de cada panel (sin los títulos) y alinea el
+    panel derecho con el izquierdo por la zona fija (máquina y fondo)."""
+    x0, y0, x1, y1 = (int(v) for v in (x0, y0, x1, y1))
+    rgb = np.asarray(Image.open(path).convert('RGB'))
+    gray = rgb.mean(axis=2)
+    h, w = gray.shape
+    c = w // 2
+    div = c - 40 + int(np.argmin(gray[:, c - 40 : c + 40].mean(axis=0)))
+    lg, rg = gray[:, : div - 3], gray[:, div + 4 :]
+    lc, rc = rgb[:, : div - 3], rgb[:, div + 4 :]
+    # Se alinea por la franja de abajo del recorte (base de la máquina y piso), que no se mueve.
+    e, dx, dy = best_shift(lg, rg, (x0, x1, y1 - (y1 - y0) // 3, y1), rng=12)
+    print(name, ': desplazamiento del panel derecho', dx, dy, 'error', round(e, 2))
+    for img, sx, sy, suffix in ((lc, 0, 0, 'a'), (rc, dx, dy, 'b')):
+        crop = img[y0 + sy : y1 + sy, x0 + sx : x1 + sx]
+        Image.fromarray(crop).save(f'{out}/{name}-{suffix}.jpg', quality=82, optimize=True, progressive=True)
+        print(f'{out}/{name}-{suffix}.jpg', crop.shape[1], crop.shape[0])
+
+
 if __name__ == '__main__':
     cmd, *args = sys.argv[1:]
-    {'pallof': pallof, 'bulgara': bulgara, 'unica': unica}[cmd](*args)
+    {'pallof': pallof, 'juntos': juntos, 'apiladas': apiladas, 'unica': unica, 'foto': foto}[cmd](*args)

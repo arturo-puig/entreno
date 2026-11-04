@@ -23,8 +23,8 @@ export interface Illustration {
   frameMs: number;
   variant?: string;
   caption?: string;
-  /** Una sola imagen con las dos posiciones una al lado de la otra (se muestra fija). */
-  sideBySide?: boolean;
+  /** Una sola imagen con las dos posiciones (se muestra fija): una al lado de la otra o una arriba de la otra. */
+  layout?: 'lado-a-lado' | 'apiladas';
   /** Crédito propio del archivo (Commons); si no, el de la fuente. */
   credit?: MediaCredit;
 }
@@ -102,7 +102,7 @@ const army = (figure: string, count: number, extra: Partial<Pick<Illustration, '
 const ia = (
   sourceId: string,
   frames: string[],
-  extra: Partial<Pick<Illustration, 'variant' | 'caption' | 'sideBySide'>> = {},
+  extra: Partial<Pick<Illustration, 'variant' | 'caption' | 'layout'>> = {},
 ): Illustration => ({
   sourceId: `ia-${sourceId}`,
   source: 'ia',
@@ -173,6 +173,18 @@ export const ILLUSTRATIONS: Record<string, Illustration[]> = {
       caption: 'Con banda elástica es igual: atala a la altura del pecho, a un costado. Hacelo de los dos lados.',
     }),
   ],
+  'hip-thrust-maquina': [
+    ia('hip-thrust-maquina', ['hip-thrust-maquina-a.jpg', 'hip-thrust-maquina-b.jpg'], {
+      caption:
+        'La máquina de tu gimnasio puede ser distinta; el movimiento es el mismo: espalda alta en el respaldo, barra sobre la cadera y, arriba, tronco y muslos en línea con las canillas verticales.',
+    }),
+  ],
+  'rueda-abdominal': [
+    ia('rueda-abdominal', ['rueda-abdominal.png'], {
+      layout: 'apiladas',
+      caption: 'Arriba: inicio, la rueda debajo de los hombros. Abajo: hasta donde llegues sin que la zona lumbar se hunda.',
+    }),
+  ],
   'sentadilla-isometrica': [
     ia('sentadilla-isometrica', ['sentadilla-isometrica-pared.png'], {
       variant: 'Contra la pared',
@@ -181,7 +193,7 @@ export const ILLUSTRATIONS: Record<string, Illustration[]> = {
   ],
   'sentadilla-bulgara': [
     ia('sentadilla-bulgara', ['sentadilla-bulgara.png'], {
-      sideBySide: true,
+      layout: 'lado-a-lado',
       caption: 'Izquierda: arriba. Derecha: abajo, con la rodilla de atrás cerca del piso sin tocarlo. Muestra dos mancuernas; el pie de adelante no se mueve durante la serie.',
     }),
   ],

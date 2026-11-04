@@ -241,10 +241,27 @@ try {
     await page.locator('.media-illustration img.is-visible').waitFor();
     check(
       'IA: sentadilla isométrica contra la pared, fija',
-      (await has(page, 'Ilustración de la posición', 'Contra la pared', 'no una demostración')) &&
+      (await has(page, 'Imagen generada con IA de la posición', 'Contra la pared', 'no una demostración')) &&
         (await page.locator('.media-tag').isVisible()) &&
         (await page.getByRole('button', { name: 'Pausar', exact: true }).count()) === 0,
     );
+
+    await go('#/ejercicios/hip-thrust-maquina', 'Cómo se hace');
+    await page.locator('.media-illustration img.is-visible').waitFor();
+    check(
+      'IA: hip thrust en máquina animado, con la aclaración del modelo de máquina',
+      (await page.locator('.media-illustration img.is-visible').evaluate((el) => el.complete && el.naturalWidth > 0 && el.src.includes('media/ia/hip-thrust'))) &&
+        (await has(page, 'de las dos posiciones del movimiento (no es un video ni una foto real)', 'puede ser distinta')) &&
+        (await page.getByRole('button', { name: 'Pausar', exact: true }).isVisible()),
+    );
+    await shot(page, '39-ia-hip-thrust');
+    await go('#/ejercicios/rueda-abdominal', 'Cómo se hace');
+    await page.locator('.media-illustration img.is-visible').waitFor();
+    check(
+      'IA: rueda abdominal fija, una posición arriba de la otra en un recuadro cuadrado',
+      (await has(page, 'una arriba de la otra', 'la rueda debajo de los hombros')) && (await page.locator('.media.is-square').count()) === 1,
+    );
+    await shot(page, '40-ia-rueda');
 
     // Martes: la rueda abdominal reemplazó al dead bug (a pedido del usuario), con la original disponible.
     await go('#/rutinas/tren-superior', 'Tren superior');
@@ -256,7 +273,7 @@ try {
     );
 
     // Sin ilustración: aviso honesto + agregar video/foto propio.
-    await go('#/ejercicios/hip-thrust-maquina', 'Cómo se hace');
+    await go('#/ejercicios/gato-vaca', 'Cómo se hace');
     check('sin ilustración: aviso honesto', await has(page, 'Todavía no hay video ni ilustración'));
     const yt = await page.getByRole('link', { name: /Buscar en YouTube/ }).getAttribute('href');
     check('buscar en YouTube: enlace de búsqueda', yt?.startsWith('https://www.youtube.com/results?search_query=') ?? false, yt);

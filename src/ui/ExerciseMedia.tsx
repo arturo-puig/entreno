@@ -12,6 +12,7 @@ type Entry =
   | { key: string; kind: 'ilustracion'; label: string; variant?: string; ill: Illustration };
 
 const BIG_VIDEO_MB = 50;
+const TWO_IN_ONE = { 'lado-a-lado': 'una al lado de la otra', apiladas: 'una arriba de la otra' } as const;
 function fileSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / (1024 * 1024)).toLocaleString('es-AR', { maximumFractionDigits: 1 })} MB`;
@@ -37,7 +38,7 @@ export function ExerciseMedia({ exercise, preferredVariant }: { exercise: Exerci
       ...illustrationsFor(exercise.id).map((ill) => ({
         key: ill.sourceId,
         kind: 'ilustracion' as const,
-        label: ill.kind === 'fotos' ? 'Fotos' : ill.source === 'ia' ? 'Ilustración IA' : 'Ilustración',
+        label: ill.kind === 'fotos' ? 'Fotos' : ill.source === 'ia' ? 'Imagen IA' : 'Ilustración',
         variant: ill.variant,
         ill,
       })),
@@ -81,7 +82,7 @@ export function ExerciseMedia({ exercise, preferredVariant }: { exercise: Exerci
         <div className="media media-empty" />
       ) : current ? (
         <>
-          <div className="media">
+          <div className={`media${current.kind === 'ilustracion' && current.ill.layout === 'apiladas' ? ' is-square' : ''}`}>
             {current.kind === 'ilustracion' ? <IllustrationPlayer ill={current.ill} name={exercise.name} /> : <OwnMediaView media={current.media} />}
           </div>
           {entries.length > 1 && (
@@ -177,12 +178,13 @@ function IllustrationPlayer({ ill, name }: { ill: Illustration; name: string }) 
   const what = ill.kind === 'fotos' ? 'fotos' : ill.source === 'ia' ? 'ilustración generada con IA' : 'ilustración';
   // Lo generado con IA lleva el rótulo sobre la imagen: nunca se confunde con una demostración.
   const tag = ill.source === 'ia' && <span className="media-tag">Generada con IA</span>;
+  const tagged = ill.source === 'ia' ? ' has-tag' : '';
   if (n === 1)
     return (
-      <div className="media-illustration">
+      <div className={`media-illustration${tagged}`}>
         <img
           src={ill.frames[0]}
-          alt={`${name}: ${what}, ${ill.sideBySide ? 'las dos posiciones una al lado de la otra' : 'la posición'}`}
+          alt={`${name}: ${what}, ${ill.layout ? `las dos posiciones ${TWO_IN_ONE[ill.layout]}` : 'la posición'}`}
           className="is-visible"
           draggable={false}
         />
@@ -190,7 +192,7 @@ function IllustrationPlayer({ ill, name }: { ill: Illustration; name: string }) 
       </div>
     );
   return (
-    <div className={`media-illustration${ill.kind === 'fotos' ? ' is-photos' : ''}`}>
+    <div className={`media-illustration${ill.kind === 'fotos' ? ' is-photos' : ''}${tagged}`}>
       {ill.frames.map((src, i) => (
         <img key={src} src={src} alt="" className={i === frame ? 'is-visible' : ''} draggable={false} loading={i === 0 ? 'eager' : 'lazy'} />
       ))}
@@ -252,8 +254,16 @@ function MediaCaption({ entry, onDelete }: { entry: Entry; onDelete: () => void 
       <span>
         {entry.ill.kind === 'fotos'
           ? `Secuencia de ${entry.ill.frames.length} fotos del movimiento (no es un video)`
-          : entry.ill.sideBySide
-            ? 'Ilustración de las dos posiciones del movimiento, una al lado de la otra (no es un video)'
+          : entry.ill.source === 'ia'
+            ? `Imagen generada con IA ${
+                entry.ill.layout
+                  ? `de las dos posiciones, ${TWO_IN_ONE[entry.ill.layout]}`
+                  : entry.ill.frames.length === 1
+                    ? 'de la posición'
+                    : 'de las dos posiciones del movimiento'
+              } (no es un video ni una foto real)`
+            : entry.ill.layout
+            ? `Ilustración de las dos posiciones del movimiento, ${TWO_IN_ONE[entry.ill.layout]} (no es un video)`
             : entry.ill.frames.length === 1
               ? 'Ilustración de la posición (no es un video)'
               : 'Ilustración de las dos posiciones del movimiento (no es un video)'}

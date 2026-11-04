@@ -12,6 +12,12 @@ Revisión a ojo, uno por uno (noviembre de 2026):
   animado parecería que el pie se desliza, por eso se muestra fija con los dos paneles juntos.
 - sentadilla-isometrica-pared.png: sentadilla isométrica contra la pared, de perfil; espalda apoyada,
   muslos cerca de la horizontal, rodillas sobre los tobillos. Una sola posición: se muestra fija.
+- rueda-abdominal.png: rueda abdominal desde las rodillas, de perfil; inicio con la rueda debajo de los
+  hombros → extendido con cadera y tronco en línea. La colchoneta cambia de largo entre paneles: fija;
+  como cada panel es muy ancho, van uno arriba del otro.
+- hip-thrust-maquina-a.jpg / -b.jpg: imagen fotorrealista (otra persona, otro gimnasio) de una máquina de
+  discos con barra guiada en rieles; se recortaron los títulos de arriba («Panel 1…»). Máquina, piso y pies
+  coinciden entre paneles (alineados por la base, -5 px): se anima. En color, JPEG.
 
 Descartadas:
 - Manguito rotador, primera tanda (3): una con el brazo estirado al frente en lugar del codo a 90°, otra
@@ -20,7 +26,11 @@ Descartadas:
   al final el codo queda por debajo del hombro.
 - Plancha lateral con rotación: apoyo en la mano con el brazo estirado (no sobre el antebrazo) y, al final,
   el pecho sigue mirando a la cámara y el brazo parece pasar por detrás de la espalda (no se ve la rotación).
-- Hip thrust en máquina: la máquina cambia entre paneles (discos sobre la cadera en uno; en el otro, discos
+- Manguito rotador, tercera tanda (fotorrealista): el brazo apunta al frente y lo que cambia es el codo
+  (como un curl a la altura del hombro), no la rotación externa; además tiene títulos.
+- Plancha lateral con rotación, segunda tanda (fotorrealista): apoyo con el brazo estirado sobre el puño
+  y flechas y títulos dibujados encima.
+- Hip thrust en máquina, primera tanda: la máquina cambia entre paneles (discos sobre la cadera en uno; en el otro, discos
   arriba en los rieles y una manija que baja al piso) y la barra está inclinada en el primero.
 
 Cambios: paneles separados por la línea divisoria (o recorte de la imagen única), recortados y alineados
