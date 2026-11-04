@@ -10,9 +10,19 @@ Revisión a ojo, uno por uno (noviembre de 2026):
 - sentadilla-bulgara.png: empeine de atrás en un banco plano, dos mancuernas, arriba → abajo con la
   rodilla de atrás cerca del piso. El pie de adelante aparece ~43 px más adelante en el segundo panel:
   animado parecería que el pie se desliza, por eso se muestra fija con los dos paneles juntos.
+- sentadilla-isometrica-pared.png: sentadilla isométrica contra la pared, de perfil; espalda apoyada,
+  muslos cerca de la horizontal, rodillas sobre los tobillos. Una sola posición: se muestra fija.
 
-Descartadas: tres imágenes del manguito rotador (una con el brazo estirado al frente en lugar del codo
-a 90°, otra con músculos dibujados sobre el hombro y una mano abierta, otra con texto y una segunda banda).
+Descartadas:
+- Manguito rotador, primera tanda (3): una con el brazo estirado al frente en lugar del codo a 90°, otra
+  con músculos dibujados sobre el hombro y una mano abierta, otra con texto y una segunda banda.
+- Manguito rotador, segunda tanda: en el inicio el brazo está estirado al costado (sin el codo a 90°) y
+  al final el codo queda por debajo del hombro.
+- Plancha lateral con rotación: apoyo en la mano con el brazo estirado (no sobre el antebrazo) y, al final,
+  el pecho sigue mirando a la cámara y el brazo parece pasar por detrás de la espalda (no se ve la rotación).
+- Hip thrust en máquina: la máquina cambia entre paneles (discos sobre la cadera en uno; en el otro, discos
+  arriba en los rieles y una manija que baja al piso) y la barra está inclinada en el primero.
 
-Cambios: paneles separados por la línea divisoria, recortados y alineados (scripts/media/ia.py),
+Cambios: paneles separados por la línea divisoria (o recorte de la imagen única), recortados y alineados
+(scripts/media/ia.py),
 fondo limpiado y pasado a 32 tonos de gris.

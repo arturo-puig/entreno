@@ -95,6 +95,35 @@ describe('actualización de la carga inicial', () => {
     db.close();
   });
 
+  it('martes: cambia el dead bug por la rueda abdominal una sola vez y solo si no lo editaste', async () => {
+    const a = new EntrenoDB(`test-${Math.random()}`);
+    await ensureSeed(a);
+    const r = (await a.routines.get('tren-superior'))!;
+    const m5 = r.items.find((i) => i.id === 'm5')!;
+    expect(m5).toMatchObject({ exerciseId: 'rueda-abdominal', notation: '2 × 8–10' });
+    expect(m5.perSide).toBeUndefined();
+    expect(m5.sets).toEqual(ROUTINES.find((x) => x.id === 'tren-superior')!.items.find((i) => i.id === 'm5')!.sets);
+    expect(r.version).toBe(2);
+    // El original de la app sigue con el dead bug («Volver a la original»).
+    expect(ROUTINES.find((x) => x.id === 'tren-superior')!.items.find((i) => i.id === 'm5')!.exerciseId).toBe('dead-bug');
+    // Si volvés a la original, no se vuelve a cambiar.
+    await a.routines.put(structuredClone(ROUTINES.find((x) => x.id === 'tren-superior')!));
+    await ensureSeed(a);
+    expect((await a.routines.get('tren-superior'))!.items.find((i) => i.id === 'm5')!.exerciseId).toBe('dead-bug');
+    a.close();
+
+    // Celular con la versión anterior donde ya lo cambiaste vos → no se toca.
+    const b = new EntrenoDB(`test-${Math.random()}`);
+    await b.routines.bulkAdd(structuredClone(ROUTINES));
+    const mine = (await b.routines.get('tren-superior'))!;
+    mine.items.find((i) => i.id === 'm5')!.exerciseId = 'plancha-frontal';
+    await b.routines.put(mine);
+    await b.meta.put({ key: 'seedRevision', value: 4 });
+    await ensureSeed(b);
+    expect((await b.routines.get('tren-superior'))!.items.find((i) => i.id === 'm5')!.exerciseId).toBe('plancha-frontal');
+    b.close();
+  });
+
   it('actualiza un texto corregido solo si no lo editaste', async () => {
     const seedManguito = EXERCISES.find((e) => e.id === 'manguito-rotador-banda')!;
     const old = {

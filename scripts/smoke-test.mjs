@@ -237,6 +237,23 @@ try {
         (await page.getByRole('button', { name: 'Pausar', exact: true }).count()) === 0,
     );
     await shot(page, '38-ia-bulgara');
+    await go('#/ejercicios/sentadilla-isometrica', 'Cómo se hace');
+    await page.locator('.media-illustration img.is-visible').waitFor();
+    check(
+      'IA: sentadilla isométrica contra la pared, fija',
+      (await has(page, 'Ilustración de la posición', 'Contra la pared', 'no una demostración')) &&
+        (await page.locator('.media-tag').isVisible()) &&
+        (await page.getByRole('button', { name: 'Pausar', exact: true }).count()) === 0,
+    );
+
+    // Martes: la rueda abdominal reemplazó al dead bug (a pedido del usuario), con la original disponible.
+    await go('#/rutinas/tren-superior', 'Tren superior');
+    check(
+      'martes: rueda abdominal en lugar del dead bug, con «Volver a la versión original»',
+      (await has(page, 'Rueda abdominal', '2 × 8–10', 'Reemplaza al dead bug')) &&
+        (await page.getByText('Dead bug', { exact: true }).count()) === 0 &&
+        (await page.getByRole('button', { name: 'Volver a la versión original' }).isVisible()),
+    );
 
     // Sin ilustración: aviso honesto + agregar video/foto propio.
     await go('#/ejercicios/hip-thrust-maquina', 'Cómo se hace');
@@ -422,8 +439,11 @@ try {
 
     // Ir a un ejercicio desde la lista.
     await page.getByRole('button', { name: 'Lista de ejercicios' }).click();
-    await page.getByRole('dialog').getByRole('button', { name: /Dead bug/ }).click();
-    check('lista: salta al ejercicio 5 (sin campo de peso)', (await has(page, 'Ejercicio 5 de 5', 'Dead bug')) && (await set(1).getByRole('button', { name: /Peso/ }).count()) === 0);
+    await page.getByRole('dialog').getByRole('button', { name: /Rueda abdominal/ }).click();
+    check(
+      'lista: salta al ejercicio 5, la rueda abdominal que reemplazó al dead bug (sin campo de peso)',
+      (await has(page, 'Ejercicio 5 de 5', 'Rueda abdominal')) && (await set(1).getByRole('button', { name: /Peso/ }).count()) === 0,
+    );
     check('sesión: sin scroll horizontal', await noHorizontalScroll(page));
 
     // Terminar con esfuerzo de la sesión.

@@ -24,7 +24,8 @@ export type Equipment =
   | 'Cinta'
   | 'Bicicleta fija'
   | 'Bicicleta'
-  | 'Paleta';
+  | 'Paleta'
+  | 'Rueda abdominal';
 
 export type MovementType =
   | 'Sentadilla'

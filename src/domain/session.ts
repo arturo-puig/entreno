@@ -126,7 +126,8 @@ export function fieldsFor(exercise: Exercise | undefined, item: SessionItem): Fi
   const planned = item.sets[0]?.planned;
   if (exercise?.movement === 'Cardio') return ['durationMin', 'distanceKm'];
   if (planned?.durationSec) return ['durationSec'];
-  const bodyweightOnly = exercise && exercise.equipment.every((e) => e === 'Peso corporal' || e === 'Banda elástica');
+  // Sin carga que anotar: peso corporal, banda o rueda abdominal.
+  const bodyweightOnly = exercise && exercise.equipment.every((e) => e === 'Peso corporal' || e === 'Banda elástica' || e === 'Rueda abdominal');
   return bodyweightOnly ? ['reps'] : ['weightKg', 'reps'];
 }
 

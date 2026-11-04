@@ -5,7 +5,12 @@ Cada original trae dos paneles (inicio | final) separados por una línea vertica
 - Sentadilla búlgara: el pie de adelante se corre ~43 px entre paneles → NO se anima (parecería que
   el pie se desliza); se arma una sola imagen con los dos paneles juntos, que se muestra fija.
 
-Uso: python3 -I scripts/media/ia.py <pallof.jpg> <bulgara.jpg> <carpeta de salida>
+- Sentadilla isométrica contra la pared: una sola posición → se recorta y se muestra fija.
+
+Uso:
+  python3 -I scripts/media/ia.py pallof <pallof.jpg> <carpeta de salida>
+  python3 -I scripts/media/ia.py bulgara <bulgara.jpg> <carpeta de salida>
+  python3 -I scripts/media/ia.py unica <imagen.jpg> <carpeta de salida> <nombre>
 """
 import sys
 
@@ -100,6 +105,14 @@ def bulgara(path, out):
     save(canvas, f'{out}/sentadilla-bulgara.png')
 
 
+def unica(path, out, name):
+    """Una sola posición: recorte al contenido con margen."""
+    im = load(path)
+    x0, x1, y0, y1 = bbox(im)
+    m = 16
+    save(im[max(0, y0 - m) : y1 + m, max(0, x0 - m) : x1 + m], f'{out}/{name}.png')
+
+
 if __name__ == '__main__':
-    pallof(sys.argv[1], sys.argv[3])
-    bulgara(sys.argv[2], sys.argv[3])
+    cmd, *args = sys.argv[1:]
+    {'pallof': pallof, 'bulgara': bulgara, 'unica': unica}[cmd](*args)

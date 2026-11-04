@@ -173,6 +173,12 @@ export const ILLUSTRATIONS: Record<string, Illustration[]> = {
       caption: 'Con banda elástica es igual: atala a la altura del pecho, a un costado. Hacelo de los dos lados.',
     }),
   ],
+  'sentadilla-isometrica': [
+    ia('sentadilla-isometrica', ['sentadilla-isometrica-pared.png'], {
+      variant: 'Contra la pared',
+      caption: 'Posición que se sostiene: espalda apoyada en la pared, muslos cerca de la horizontal y rodillas sobre los tobillos. Las manos descansan sin empujar los muslos.',
+    }),
+  ],
   'sentadilla-bulgara': [
     ia('sentadilla-bulgara', ['sentadilla-bulgara.png'], {
       sideBySide: true,

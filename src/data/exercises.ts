@@ -175,6 +175,30 @@ export const EXERCISES: Exercise[] = [
     substitutions: ['plancha-frontal'],
   },
   {
+    id: 'rueda-abdominal',
+    name: 'Rueda abdominal',
+    aliases: ['Rueda abdominal de rodillas', 'Rollout'],
+    nameEn: 'Ab wheel rollout (kneeling)',
+    group: 'Core',
+    primaryMuscles: ['Recto abdominal', 'Transverso abdominal'],
+    secondaryMuscles: ['Oblicuos', 'Dorsal ancho', 'Hombros'],
+    equipment: ['Rueda abdominal'],
+    movement: 'Core',
+    instructions: [
+      'De rodillas sobre una colchoneta, con la rueda en el piso debajo de los hombros y los brazos estirados.',
+      'Apretá abdomen y glúteos y llevá la rueda hacia adelante de a poco, sin que la zona lumbar se hunda.',
+      'Llegá solo hasta donde puedas mantener esa posición y volvé tirando con el abdomen, no sacando la cola hacia atrás.',
+    ],
+    instructionsNote:
+      'Descripción estándar; validala con tu profe. Cumple la misma función que el dead bug (que la zona lumbar no se arquee), con más exigencia. Sin rueda sirve una barra con discos redondos.',
+    commonErrors: [
+      'Dejar que la zona lumbar se hunda.',
+      'Ir más lejos de lo que podés controlar.',
+      'Volver sacando la cola hacia atrás en lugar de usar el abdomen.',
+    ],
+    substitutions: ['dead-bug', 'plancha-frontal'],
+  },
+  {
     id: 'abdominales-banco-inclinado',
     name: 'Abdominales en banco inclinado',
     nameEn: 'Decline sit-up',

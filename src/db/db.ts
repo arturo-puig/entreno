@@ -3,6 +3,7 @@ import type { AssistantLogEntry, BodyMetric, DayPlan, DayState, Exercise, MetaEn
 import { EXERCISES } from '../data/exercises';
 import { ROUTINES, WEEK_PLAN } from '../data/routines';
 import { HISTORY } from '../data/history';
+import { withNewVersion } from '../domain/edit';
 
 export class EntrenoDB extends Dexie {
   // Las claves son strings que definimos nosotros (no autoincrementales).
@@ -35,7 +36,7 @@ export class EntrenoDB extends Dexie {
 export const db = new EntrenoDB();
 
 /** Subir este número cuando se agreguen ejercicios, rutinas o variantes a la carga inicial. */
-export const SEED_REVISION = 4;
+export const SEED_REVISION = 5;
 
 /**
  * Agrega lo que falte de la carga inicial sin pisar nada que ya exista,
@@ -53,6 +54,7 @@ export async function ensureSeed(database: EntrenoDB = db): Promise<void> {
       await mergeVariants(database, EXERCISES);
       await refreshSeedTexts(database, EXERCISES);
       await addMissing(database.routines, ROUTINES);
+      await applyRequestedChanges(database);
       await addMissing(database.sessions, HISTORY);
       if (!(await database.meta.get('weekPlan'))) {
         await database.meta.put({ key: 'weekPlan', value: WEEK_PLAN });
@@ -98,6 +100,22 @@ const PREVIOUS_SEED_TEXT: Record<string, Pick<Exercise, 'instructions' | 'instru
     ],
   },
 };
+
+/**
+ * Cambios en las rutinas que pediste vos. Se aplican una sola vez y solo si esa parte sigue como venía en la app
+ * (si la editaste, no se toca). La rutina sube de versión y «Volver a la original» los deshace.
+ */
+async function applyRequestedChanges(database: EntrenoDB) {
+  // Noviembre de 2026: el dead bug del martes no te exige → rueda abdominal, mismas series y repeticiones.
+  const r = await database.routines.get('tren-superior');
+  const item = r?.items.find((i) => i.id === 'm5');
+  if (!r || !item || item.exerciseId !== 'dead-bug' || item.notation !== '2 × 8–10 por lado') return;
+  item.exerciseId = 'rueda-abdominal';
+  item.notation = '2 × 8–10';
+  delete item.perSide;
+  item.note = 'Reemplaza al dead bug, a tu pedido. Si no llegás a 8 con buena técnica, acortá el recorrido.';
+  await database.routines.put(withNewVersion(r));
+}
 
 async function refreshSeedTexts(database: EntrenoDB, seed: Exercise[]) {
   const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
