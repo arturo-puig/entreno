@@ -121,7 +121,7 @@ try {
     check('rutina B corta: 3 ejercicios sin tocar la original', await has(page, '3 ejercicios', 'No modifica la rutina original'));
     await page.getByRole('button', { name: 'Completa' }).click();
     await page.getByRole('button', { name: /Peso muerto unilateral/ }).click();
-    check('ejercicio: instrucciones y aviso de medios honesto', await has(page, 'Cómo se hace', 'Todavía no hay video ni ilustración'));
+    check('ejercicio: instrucciones y fotos con la aclaración de la carga', await has(page, 'Cómo se hace', 'Secuencia de 11 fotos', 'Sin carga'));
     await page.getByRole('button', { name: 'Volver' }).click();
     check('volver: regresa a la Rutina B', await has(page, 'Vuelos posteriores') && (await title(page)) === 'Rutina B');
 
@@ -189,6 +189,32 @@ try {
     await shot(page, '11-ejercicio-ilustracion');
     await go('#/ejercicios/jalon-al-pecho', 'Cómo se hace');
     check('ilustración por variante: jalón con agarre neutro', await has(page, 'Muestra el agarre neutro'));
+
+    // Fotos reales del manual del Ejército de EE.UU. (dominio público), animadas cuadro por cuadro.
+    await go('#/ejercicios/movilidad-tobillo', 'Cómo se hace');
+    const photo = page.locator('.media-illustration.is-photos img.is-visible');
+    await photo.waitFor();
+    check(
+      'fotos: secuencia incluida en la app, con fuente y dominio público',
+      (await photo.evaluate((el) => el.complete && el.naturalWidth > 0 && el.src.includes('media/ejercito/atp-17-7'))) &&
+        (await has(page, 'Secuencia de 8 fotos', 'Ejército de EE.UU.', 'Dominio público', 'no implica respaldo')),
+    );
+    const badge = page.locator('.media-badge');
+    const first = await badge.innerText();
+    await page.waitForTimeout(1300);
+    check('fotos: se animan solas', (await badge.innerText()) !== first, `${first} → ${await badge.innerText()}`);
+    await shot(page, '36-fotos-tobillo');
+    await go('#/ejercicios/press-banca-barra', 'Cómo se hace');
+    check(
+      'fotos y dibujo: se puede elegir',
+      (await page.getByRole('group', { name: 'Elegir imagen o video' }).getByRole('button', { name: 'Fotos' }).count()) === 1 &&
+        (await page.getByRole('group', { name: 'Elegir imagen o video' }).getByRole('button', { name: 'Ilustración' }).count()) === 1,
+    );
+    await go('#/ejercicios/plancha-frontal', 'Cómo se hace');
+    check(
+      'plancha: dibujo fijo de Commons con su autor y licencia',
+      (await has(page, 'Ilustración de la posición', 'Pk0001', 'CC BY-SA 4.0')) && (await page.getByRole('button', { name: 'Pausar', exact: true }).count()) === 0,
+    );
 
     // Sin ilustración: aviso honesto + agregar video/foto propio.
     await go('#/ejercicios/hip-thrust-maquina', 'Cómo se hace');
@@ -445,6 +471,10 @@ try {
     const offImg = page.locator('.media-illustration img.is-visible');
     await offImg.waitFor({ timeout: 5000 }).catch(() => {});
     check('sin conexión: las ilustraciones se ven', await offImg.evaluate((el) => el.complete && el.naturalWidth > 0).catch(() => false));
+    await page.goto(`${BASE}#/ejercicios/peso-muerto-unilateral`);
+    const offPhoto = page.locator('.media-illustration.is-photos img.is-visible');
+    await offPhoto.waitFor({ timeout: 5000 }).catch(() => {});
+    check('sin conexión: las fotos se ven', await offPhoto.evaluate((el) => el.complete && el.naturalWidth > 0).catch(() => false));
     await shot(page, '23-sin-conexion');
     await context.setOffline(false);
 

@@ -1522,6 +1522,16 @@ select.input {
   opacity: 1;
 }
 
+/* Secuencias de fotos: cambio de cuadro casi sin fundido (se ve como movimiento, no como superposición). */
+.media-illustration.is-photos {
+  background: #fff;
+}
+
+.media-illustration.is-photos img {
+  transition: opacity 60ms linear;
+  mix-blend-mode: normal;
+}
+
 .media-hit {
   position: absolute;
   inset: 0;

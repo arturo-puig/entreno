@@ -221,7 +221,8 @@ export function respond(
       const e = exercise!;
       const own = ctx.ownMedia.has(e.id);
       const ills = illustrationsFor(e.id).length;
-      const media = own ? 'Tenés un video o foto tuyo.' : ills ? 'Tiene ilustración.' : 'Todavía no tiene video ni ilustración: podés grabar uno.';
+      const photos = illustrationsFor(e.id).some((i) => i.kind === 'fotos');
+      const media = own ? 'Tenés un video o foto tuyo.' : photos ? 'Tiene fotos del movimiento.' : ills ? 'Tiene ilustración.' : 'Todavía no tiene video ni ilustración: podés grabar uno.';
       return {
         ...base,
         exerciseId: e.id,

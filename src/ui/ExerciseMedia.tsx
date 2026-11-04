@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { addUserMedia, deleteUserMedia, prepareMedia } from '../db/actions';
 import type { Exercise, UserMedia } from '../db/types';
-import { EVERKINETIC_CREDIT, illustrationsFor, type Illustration } from '../data/media';
+import { creditFor, illustrationsFor, type Illustration } from '../data/media';
 import { Icon } from './Icon';
 import { ConfirmSheet, Sheet } from './common';
 
@@ -37,7 +37,7 @@ export function ExerciseMedia({ exercise, preferredVariant }: { exercise: Exerci
       ...illustrationsFor(exercise.id).map((ill) => ({
         key: ill.sourceId,
         kind: 'ilustracion' as const,
-        label: 'Ilustración',
+        label: ill.kind === 'fotos' ? 'Fotos' : 'Ilustración',
         variant: ill.variant,
         ill,
       })),
@@ -157,28 +157,43 @@ export function ExerciseMedia({ exercise, preferredVariant }: { exercise: Exerci
 
 function IllustrationPlayer({ ill, name }: { ill: Illustration; name: string }) {
   const reduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const n = ill.frames.length;
   const [frame, setFrame] = useState(0);
   const [playing, setPlaying] = useState(!reduced);
+  const next = () => setFrame((f) => (f + 1) % n);
+
+  useEffect(() => {
+    setFrame(0);
+  }, [ill.sourceId]);
 
   useEffect(() => {
     if (!playing) return;
-    const id = window.setInterval(() => setFrame((f) => 1 - f), 1300);
-    return () => window.clearInterval(id);
-  }, [playing]);
+    // En las secuencias, el primer y el último cuadro (posición de inicio) duran un poco más.
+    const extra = n > 2 && (frame === 0 || frame === n - 1) ? 300 : 0;
+    const id = window.setTimeout(next, ill.frameMs + extra);
+    return () => window.clearTimeout(id);
+  }, [playing, frame, ill.frameMs, n]);
 
+  const what = ill.kind === 'fotos' ? 'fotos' : 'ilustración';
+  if (n === 1)
+    return (
+      <div className="media-illustration">
+        <img src={ill.frames[0]} alt={`${name}: ilustración de la posición`} className="is-visible" draggable={false} />
+      </div>
+    );
   return (
-    <div className="media-illustration">
+    <div className={`media-illustration${ill.kind === 'fotos' ? ' is-photos' : ''}`}>
       {ill.frames.map((src, i) => (
-        <img key={src} src={src} alt="" className={i === frame ? 'is-visible' : ''} draggable={false} />
+        <img key={src} src={src} alt="" className={i === frame ? 'is-visible' : ''} draggable={false} loading={i === 0 ? 'eager' : 'lazy'} />
       ))}
-      {/* Tocar la imagen: pausa; en pausa, cambia de posición. */}
+      {/* Tocar la imagen: pausa; en pausa, pasa a la posición siguiente. */}
       <button
         className="media-hit"
-        onClick={() => (playing ? setPlaying(false) : setFrame((f) => 1 - f))}
-        aria-label={`${name}: ilustración, posición ${frame + 1} de 2. ${playing ? 'Tocá para pausar.' : 'Tocá para ver la otra posición.'}`}
+        onClick={() => (playing ? setPlaying(false) : next())}
+        aria-label={`${name}: ${what}, posición ${frame + 1} de ${n}. ${playing ? 'Tocá para pausar.' : 'Tocá para ver la posición siguiente.'}`}
       />
       <span className="media-badge" aria-hidden="true">
-        {frame + 1}/2
+        {frame + 1}/{n}
       </span>
       <button className="media-ctrl" onClick={() => setPlaying((p) => !p)}>
         {playing ? 'Pausar' : 'Animar'}
@@ -222,11 +237,15 @@ function MediaCaption({ entry, onDelete }: { entry: Entry; onDelete: () => void 
       </div>
     );
   }
-  const c = EVERKINETIC_CREDIT;
+  const c = creditFor(entry.ill);
   return (
     <div className="media-caption is-stacked">
       <span>
-        Ilustración de las dos posiciones del movimiento (no es un video)
+        {entry.ill.kind === 'fotos'
+          ? `Secuencia de ${entry.ill.frames.length} fotos del movimiento (no es un video)`
+          : entry.ill.frames.length === 1
+            ? 'Ilustración de la posición (no es un video)'
+            : 'Ilustración de las dos posiciones del movimiento (no es un video)'}
         {entry.variant && <> · <strong>{entry.variant}</strong></>}.
       </span>
       {entry.ill.caption && <span>{entry.ill.caption}</span>}
@@ -238,7 +257,8 @@ function MediaCaption({ entry, onDelete }: { entry: Entry; onDelete: () => void 
         <a href={c.licenseUrl} target="_blank" rel="noopener noreferrer">
           {c.license}
         </a>{' '}
-        · adaptada
+        · {c.changes === 'Sin cambios.' ? 'sin cambios' : 'adaptada'}
+        {c.note ? `. ${c.note}` : ''}
       </span>
     </div>
   );

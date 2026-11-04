@@ -64,7 +64,7 @@ describe('ensureSeed', () => {
 describe('ilustraciones', async () => {
   const { ILLUSTRATIONS } = await import('./media');
   // Lista los archivos reales de public/ (sin depender de las APIs de Node).
-  const files = new Set(Object.keys(import.meta.glob('/public/media/**/*.png')));
+  const files = new Set(Object.keys(import.meta.glob('/public/media/**/*.{png,jpg,svg}')));
   const existsSync = (path: string) => files.has(`/${path}`);
 
   it('cada ilustración apunta a un ejercicio existente y a archivos que existen', () => {
