@@ -1,7 +1,7 @@
 import type { BodyMetric, DayPlan, DayState, Exercise, Routine, Session } from '../db/types';
 import { illustrationsFor } from '../data/media';
 import { capitalize, parseISODate, toISODate, weekdayName, weekdayNameOf } from '../domain/dates';
-import { estimateRoutineMinutes } from '../domain/estimate';
+import { estimateRoutineMinutes, personalPace } from '../domain/estimate';
 import { formatLoggedSet } from '../domain/format';
 import { WEEKDAYS_FROM_MONDAY } from '../domain/order';
 import { hasShortVersion, itemsForMode, pendingQuestions, type Mode } from '../domain/plan';
@@ -197,7 +197,7 @@ export function respond(
       const open = isToday && ctx.sessions.find((s) => s.date === iso && s.routineId === r.id && s.status === 'en-curso');
       return {
         ...base,
-        text: `${label} toca ${r.name}${mode === 'corta' ? ' (versión corta)' : ''}: ${items.length} ejercicios, ≈ ${estimateRoutineMinutes(r, mode)} min.`,
+        text: `${label} toca ${r.name}${mode === 'corta' ? ' (versión corta)' : ''}: ${items.length} ejercicios, ≈ ${estimateRoutineMinutes(r, mode, personalPace(ctx.sessions)?.factor)} min.`,
         lines: [names.join(' · ')],
         buttons: isToday
           ? open
@@ -294,14 +294,14 @@ export function respond(
     case 'poco-tiempo': {
       const minutes = nums.find((n) => n.unit === 'min' || n.unit === undefined)?.value;
       if (!todayRoutine) return { ...base, text: 'Hoy no tenés una rutina planificada.', chips: [say('¿Qué toca hoy?')] };
-      const full = estimateRoutineMinutes(todayRoutine, 'completa');
+      const full = estimateRoutineMinutes(todayRoutine, 'completa', personalPace(ctx.sessions)?.factor);
       if (minutes !== undefined && minutes >= full) {
         return { ...base, text: `Con ${minutes} min te alcanza para ${todayRoutine.name} completa (≈ ${full} min).`, buttons: [{ label: 'Empezar', action: { type: 'start-session', routineId: todayRoutine.id, mode: 'completa' } }] };
       }
       if (!hasShortVersion(todayRoutine)) {
         return { ...base, text: `${todayRoutine.name} no tiene versión corta.`, lines: ['Podés hacer los primeros ejercicios y marcar la sesión como incompleta: igual suma.'] };
       }
-      const short = estimateRoutineMinutes(todayRoutine, 'corta');
+      const short = estimateRoutineMinutes(todayRoutine, 'corta', personalPace(ctx.sessions)?.factor);
       if (minutes !== undefined && minutes < 15) {
         return { ...base, text: `Con ${minutes} min, mejor algo liviano: movilidad o una caminata.`, lines: ['Sostener el hábito suma más que forzar una sesión apurada.'], chips: [say('Anotá una caminata')] };
       }

@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import { EXERCISES } from './exercises';
-import { ROUTINES, WEEK_PLAN } from './routines';
+import { MORNING_ROUTINES, ROUTINES, WEEK_PLAN } from './routines';
 import { HISTORY } from './history';
 import { EntrenoDB, ensureSeed } from '../db/db';
 
@@ -103,7 +103,7 @@ describe('actualización de la carga inicial', () => {
     expect(m5).toMatchObject({ exerciseId: 'rueda-abdominal', notation: '2 × 8–10' });
     expect(m5.perSide).toBeUndefined();
     expect(m5.sets).toEqual(ROUTINES.find((x) => x.id === 'tren-superior')!.items.find((i) => i.id === 'm5')!.sets);
-    expect(r.version).toBe(2);
+    expect(r.version).toBe(3); // rueda abdominal + mañanas de 40 min
     // El original de la app sigue con el dead bug («Volver a la original»).
     expect(ROUTINES.find((x) => x.id === 'tren-superior')!.items.find((i) => i.id === 'm5')!.exerciseId).toBe('dead-bug');
     // Si volvés a la original, no se vuelve a cambiar.
@@ -122,6 +122,51 @@ describe('actualización de la carga inicial', () => {
     await ensureSeed(b);
     expect((await b.routines.get('tren-superior'))!.items.find((i) => i.id === 'm5')!.exerciseId).toBe('plancha-frontal');
     b.close();
+  });
+
+  it('mañanas de 40 min: en un celular nuevo, martes y jueves quedan con la versión corta y la entrada en calor', async () => {
+    const a = new EntrenoDB(`test-${Math.random()}`);
+    await ensureSeed(a);
+    for (const id of ['tren-superior', 'complementaria-jueves'] as const) {
+      const r = (await a.routines.get(id))!;
+      expect(r.items, id).toEqual(MORNING_ROUTINES[id].items);
+      expect(r.notes, id).toBe(MORNING_ROUTINES[id].notes);
+    }
+    expect((await a.meta.get('requestedChanges'))?.value).toEqual(['rueda-abdominal', 'mananas-40-min']);
+    a.close();
+  });
+
+  it('mañanas de 40 min: en tu celular (con la rueda ya puesta) se aplica, conserva tus respaldos y respeta lo editado', async () => {
+    const a = new EntrenoDB(`test-${Math.random()}`);
+    await a.routines.bulkAdd(structuredClone(ROUTINES));
+    const tue = (await a.routines.get('tren-superior'))!;
+    Object.assign(tue.items.find((i) => i.id === 'm5')!, { exerciseId: 'rueda-abdominal', notation: '2 × 8–10', perSide: undefined, note: 'x' });
+    delete tue.items.find((i) => i.id === 'm5')!.perSide;
+    tue.items.find((i) => i.id === 'm1')!.backupExerciseId = 'remo-sentado-polea';
+    tue.version = 2;
+    await a.routines.put(tue);
+    // El jueves lo habías editado (otro descanso): no se toca.
+    const thu = (await a.routines.get('complementaria-jueves'))!;
+    thu.items[0].restSec = 45;
+    await a.routines.put(thu);
+    await a.meta.put({ key: 'seedRevision', value: 5 });
+    await ensureSeed(a);
+    const after = (await a.routines.get('tren-superior'))!;
+    expect(after.version).toBe(3);
+    expect(after.items.map((i) => i.exerciseId)).toEqual(MORNING_ROUTINES['tren-superior'].items.map((i) => i.exerciseId));
+    expect(after.items.find((i) => i.id === 'm1')!.backupExerciseId).toBe('remo-sentado-polea');
+    expect((await a.routines.get('complementaria-jueves'))!.items[0].restSec).toBe(45);
+    a.close();
+  });
+
+  it('si volvés a la versión original, una actualización posterior no la vuelve a cambiar', async () => {
+    const a = new EntrenoDB(`test-${Math.random()}`);
+    await ensureSeed(a);
+    await a.routines.put(structuredClone(ROUTINES.find((x) => x.id === 'tren-superior')!));
+    await a.meta.put({ key: 'seedRevision', value: 5 }); // simula una actualización de la carga inicial
+    await ensureSeed(a);
+    expect((await a.routines.get('tren-superior'))!.items.find((i) => i.id === 'm5')!.exerciseId).toBe('dead-bug');
+    a.close();
   });
 
   it('actualiza un texto corregido solo si no lo editaste', async () => {

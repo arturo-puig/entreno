@@ -358,12 +358,20 @@ function ItemEditorSheet(props: {
         </Field>
 
         {!isTime && (
-          <Switch
-            checked={item.loadPattern === 'ascendente'}
-            onChange={(v) => set({ loadPattern: v ? 'ascendente' : undefined })}
-            label="Carga ascendente"
-            description="Subir el peso en cada serie (pirámide)."
-          />
+          <>
+            <Switch
+              checked={item.loadPattern === 'ascendente'}
+              onChange={(v) => set({ loadPattern: v ? 'ascendente' : undefined })}
+              label="Carga ascendente"
+              description="Subir el peso en cada serie (pirámide)."
+            />
+            <Switch
+              checked={item.loadPattern === 'fija'}
+              onChange={(v) => set({ loadPattern: v ? 'fija' : undefined })}
+              label="Misma carga en todas las series"
+              description="La app te sugiere el peso de tu serie anterior: no perdés tiempo cambiando discos."
+            />
+          </>
         )}
 
         {!isTime && (

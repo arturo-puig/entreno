@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { ROUTINES, WEEK_PLAN } from '../data/routines';
+import { MORNING_ROUTINES, ROUTINES, WEEK_PLAN } from '../data/routines';
 import type { Session } from '../db/types';
 import { addDays, dayAndMonth, startOfWeek, toISODate, weekdayName } from './dates';
-import { estimateRoutineMinutes } from './estimate';
+import { estimateRemainingSeconds, estimateRoutineMinutes, estimateRoutineSeconds, personalPace } from './estimate';
+import { createSession } from './session';
 import { summarizeSets, formatKg, formatLoggedSet } from './format';
 import { setsForMode, itemsForMode, pendingQuestions } from './plan';
 import { missedProfessorRoutine, planFor, weekOverview } from './schedule';
@@ -122,10 +123,38 @@ describe('versión corta', () => {
 });
 
 describe('estimación de duración', () => {
-  it('las rutinas del profe rondan los 75 minutos disponibles', () => {
-    expect(estimateRoutineMinutes(routine('rutina-a'), 'completa')).toBeGreaterThanOrEqual(65);
-    expect(estimateRoutineMinutes(routine('rutina-a'), 'completa')).toBeLessThanOrEqual(80);
-    expect(estimateRoutineMinutes(routine('rutina-b'), 'completa')).toBeLessThanOrEqual(85);
+  it('las rutinas del profe: estimación base realista (más que la suma de series y descansos)', () => {
+    expect(estimateRoutineMinutes(routine('rutina-a'), 'completa')).toBeGreaterThanOrEqual(75);
+    expect(estimateRoutineMinutes(routine('rutina-a'), 'completa')).toBeLessThanOrEqual(100);
+    expect(estimateRoutineMinutes(routine('rutina-b'), 'completa')).toBeLessThanOrEqual(110);
+  });
+
+  const morning = (id: keyof typeof MORNING_ROUTINES) => ({ ...routine(id), ...MORNING_ROUTINES[id] });
+
+  it('mañanas de martes y jueves: ~40 min con la entrada en calor, aunque vayas un 15 % más lento', () => {
+    for (const id of ['tren-superior', 'complementaria-jueves'] as const) {
+      const r = morning(id);
+      expect(r.items[0], id).toMatchObject({ exerciseId: 'trote-cinta', sets: [{ durationSec: 480, distanceKm: 1 }] });
+      expect(estimateRoutineSeconds(r, 'completa') / 60, id).toBeLessThanOrEqual(36);
+      expect(estimateRoutineMinutes(r, 'completa', 1.15), id).toBeLessThanOrEqual(40);
+      // Lo opcional queda al final.
+      const firstOptional = r.items.findIndex((i) => i.optional);
+      expect(r.items.slice(firstOptional).every((i) => i.optional), id).toBe(true);
+    }
+  });
+
+  it('misma carga en las mañanas (salvo el cardio y lo que no lleva peso)', () => {
+    const tue = morning('tren-superior');
+    expect(tue.items.filter((i) => i.loadPattern === 'fija').map((i) => i.exerciseId)).toEqual([
+      'jalon-al-pecho', 'press-inclinado-mancuernas', 'remo-sentado-polea', 'elevaciones-laterales',
+    ]);
+  });
+
+  it('tu ritmo no estira el cardio: la entrada en calor dura 8 min a cualquier ritmo', () => {
+    const r = morning('complementaria-jueves');
+    const base = estimateRoutineSeconds(r, 'completa');
+    const slow = estimateRoutineSeconds(r, 'completa', 1.5);
+    expect(slow - base).toBeCloseTo((base - 480) * 0.5, 5);
   });
 
   it('las complementarias entran en 45 minutos', () => {
@@ -174,5 +203,54 @@ describe('búsqueda de ejercicios', async () => {
     const pecho = names({ group: 'Pecho', equipment: 'Máquina' });
     expect(pecho).toEqual(['press-pecho-maquina']);
     expect(names({ movement: 'Cardio', q: 'cinta' })).toEqual(expect.arrayContaining(['caminata-cinta', 'trote-cinta']));
+  });
+});
+
+describe('tu ritmo real', () => {
+  const start = new Date('2026-11-05T07:00:00-03:00');
+  /** Sesión del jueves con las series hechas cada `gapSec` segundos después de la entrada en calor. */
+  function timed(gapSec: number, date = '2026-11-05'): Session {
+    const r = { ...ROUTINES.find((x) => x.id === 'complementaria-jueves')!, ...MORNING_ROUTINES['complementaria-jueves'] };
+    const s = createSession({ routine: r, mode: 'completa', date, now: start });
+    let t = start.getTime() + 8 * 60_000; // la entrada en calor
+    s.items[0].sets[0] = { ...s.items[0].sets[0], done: true, durationSec: 480, completedAt: new Date(t).toISOString() };
+    for (const it of s.items.slice(1, 4)) {
+      for (const set of it.sets) {
+        t += gapSec * 1000;
+        Object.assign(set, { done: true, reps: 10, weightKg: 20, completedAt: new Date(t).toISOString() });
+      }
+    }
+    return { ...s, status: 'incompleta' };
+  }
+
+  it('sin sesiones registradas no hay ajuste', () => {
+    expect(personalPace([])).toBeUndefined();
+  });
+
+  it('si tardás más que el cálculo base, el factor lo refleja (y no cuenta el cardio)', () => {
+    const slow = personalPace([timed(260)]);
+    const fast = personalPace([timed(140)]);
+    expect(slow!.factor).toBeGreaterThan(1.1);
+    expect(fast!.factor).toBeLessThan(slow!.factor);
+    expect(slow!.sessions).toBe(1);
+  });
+
+  it('ignora sesiones en curso, cargadas en papel y valores absurdos', () => {
+    expect(personalPace([{ ...timed(260), status: 'en-curso' }])).toBeUndefined();
+    expect(personalPace([{ ...timed(260), backfill: true }])).toBeUndefined();
+    expect(personalPace([timed(2000)])).toBeUndefined(); // sesión olvidada abierta
+  });
+
+  it('lo que falta de una sesión: lo obligatorio y lo opcional por separado', () => {
+    const r = { ...ROUTINES.find((x) => x.id === 'complementaria-jueves')!, ...MORNING_ROUTINES['complementaria-jueves'] };
+    const s = createSession({ routine: r, mode: 'completa', date: '2026-11-05', now: start });
+    const all = estimateRemainingSeconds(s);
+    expect(all.required).toBeCloseTo(estimateRoutineSeconds(r, 'completa'), 5);
+    expect(all.optional).toBeGreaterThan(0);
+    // Hecha la entrada en calor, faltan ~8 minutos menos.
+    s.items[0].sets[0].done = true;
+    expect(all.required - estimateRemainingSeconds(s).required).toBeCloseTo(480 + 150, 5);
+    // Más lento: falta más.
+    expect(estimateRemainingSeconds(s, 1.3).required).toBeGreaterThan(estimateRemainingSeconds(s).required);
   });
 });

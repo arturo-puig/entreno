@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import type { Exercise, RoutineItem } from '../db/types';
 import { estimateRoutineMinutes } from '../domain/estimate';
+import { usePace } from '../db/pace';
 import { formatDuration, formatKg, formatRest, summarizeSets } from '../domain/format';
 import { hasShortVersion, itemsForMode, type Mode } from '../domain/plan';
 import { navigate, switchTab } from '../router';
@@ -13,6 +14,7 @@ import { Badge, ConfirmSheet, Loading, NotFound, PendingNote, ScreenHeader, orig
 export function RoutineDetail({ id }: { id: string }) {
   const [mode, setMode] = useState<Mode>('completa');
   const [confirm, setConfirm] = useState<'restaurar' | 'borrar' | null>(null);
+  const pace = usePace();
   const data = useLiveQuery(async () => {
     const [routine, exercises] = await Promise.all([db.routines.get(id), db.exercises.toArray()]);
     return { routine, exercises };
@@ -33,12 +35,17 @@ export function RoutineDetail({ id }: { id: string }) {
       <ScreenHeader title={routine.name} eyebrow={originLabel(routine)} back="/rutinas" />
       <div className="meta-row">
         <span>
-          <Icon name="clock" size={18} /> ≈ {estimateRoutineMinutes(routine, mode)} min
+          <Icon name="clock" size={18} /> ≈ {estimateRoutineMinutes(routine, mode, pace?.factor)} min
         </span>
         <span>
           <Icon name="list" size={18} /> {items.length} ejercicios
         </span>
       </div>
+      <p className="hint">
+        {pace
+          ? `Tiempo calculado con tu ritmo real (${pace.sessions === 1 ? 'tu última sesión' : `tus últimas ${pace.sessions} sesiones`}), sin lo opcional.`
+          : 'Tiempo aproximado, sin lo opcional: se ajusta solo con tu ritmo cuando registres sesiones.'}
+      </p>
       {routine.version > 1 && (
         <p className="hint">
           Versión {routine.version} · modificada el {new Date(routine.updatedAt).toLocaleDateString('es-AR')}
@@ -178,7 +185,8 @@ function ItemCard({ n, item, exercise, mode, backupName }: { n: number; item: Ro
       </dl>
       {(item.loadPattern || item.optional || (item.short && mode === 'completa')) && (
         <div className="badges">
-          {item.loadPattern && <Badge>Carga ascendente</Badge>}
+          {item.loadPattern === 'ascendente' && <Badge>Carga ascendente</Badge>}
+          {item.loadPattern === 'fija' && <Badge>Misma carga en todas las series</Badge>}
           {item.optional && <Badge>Opcional</Badge>}
           {item.short && mode === 'completa' && (
             <Badge tone="accent">

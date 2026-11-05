@@ -71,11 +71,19 @@ export function coachLine(p: CoachInput): string {
 
   if (p.cardio) {
     if (done) return next ? `¡Cardio listo! Sigue: ${next}.` : '¡Cardio listo! Tocá Terminar.';
-    if (p.cardio.elapsedSec === undefined) return 'Ritmo cómodo: tenés que poder hablar en frases completas. Tocá Empezar cuando arranques.';
+    if (p.cardio.elapsedSec === undefined) {
+      return item.plan?.group && /calor/i.test(item.plan.group.label)
+        ? `Entrada en calor: suave, sin apuro. Después, ${next ?? 'a terminar'}. Tocá Empezar cuando arranques.`
+        : 'Ritmo cómodo: tenés que poder hablar en frases completas. Tocá Empezar cuando arranques.';
+    }
     return cardioLine(p.cardio.elapsedSec, p.cardio.targetSec, p.cardio.maxSec);
   }
 
-  if (total > 0 && done === total) return next ? `¡Listo ${name}! Sigue: ${next}.` : '¡Último ejercicio hecho! Tocá Terminar.';
+  const onlyOptionalAfter = index < n - 1 && items.slice(index + 1).every((i) => i.optional);
+  if (total > 0 && done === total) {
+    if (onlyOptionalAfter) return `¡Listo ${name}! Lo que queda es opcional: si te da el tiempo, ${next}; si no, tocá Terminar.`;
+    return next ? `¡Listo ${name}! Sigue: ${next}.` : '¡Último ejercicio hecho! Tocá Terminar.';
+  }
 
   if (done > 0) {
     const lastDoneIndex = item.sets.map((s) => s.done).lastIndexOf(true);

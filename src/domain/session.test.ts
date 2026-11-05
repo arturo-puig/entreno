@@ -89,6 +89,18 @@ describe('valores sugeridos y completar series', () => {
     expect(setHints(a.items[3], 1).weightKg).toBeUndefined();
   });
 
+  it('misma carga en todas las series: sugiere la de tu serie anterior de hoy, no la de la vez pasada', () => {
+    const fixed = structuredClone(jalon);
+    fixed.plan = { ...fixed.plan!, loadPattern: 'fija' };
+    const last = { ...prev!, sets: [{ done: true, weightKg: 40, reps: 10 }, { done: true, weightKg: 45, reps: 9 }, { done: true, weightKg: 50, reps: 8 }] };
+    expect(setHints(fixed, 0, last).weightKg).toBe(40); // la primera, como la vez anterior
+    fixed.sets[0] = { ...fixed.sets[0], done: true, weightKg: 42.5, reps: 10 };
+    expect(setHints(fixed, 1, last).weightKg).toBe(42.5); // las siguientes, igual que hoy
+    expect(setHints(fixed, 2, last).weightKg).toBe(42.5);
+    // Sin «misma carga», sigue la vez anterior serie por serie.
+    expect(setHints({ ...fixed, plan: { ...fixed.plan!, loadPattern: undefined } }, 2, last).weightKg).toBe(50);
+  });
+
   it('usa la carga de referencia del profe solo en la primera serie', () => {
     const b = createSession({ routine: routine('rutina-b'), mode: 'completa', date: '2026-11-07', now: NOW });
     const pm = b.items.find((i) => i.exerciseId === 'peso-muerto-unilateral')!;

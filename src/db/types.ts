@@ -92,8 +92,8 @@ export interface RoutineItem {
   sets: PlannedSet[];
   /** separado = todas las series de un lado y después del otro; alternado = ambos lados en la misma serie */
   perSide?: 'separado' | 'alternado';
-  /** Pirámide con carga que sube en cada serie */
-  loadPattern?: 'ascendente';
+  /** ascendente = pirámide, la carga sube en cada serie; fija = misma carga en todas (sin cambiar discos). */
+  loadPattern?: 'ascendente' | 'fija';
   /** Carga de referencia indicada (no es una obligación) */
   referenceLoadKg?: number;
   restSec: number;

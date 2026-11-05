@@ -1,4 +1,4 @@
-import type { DayPlan, PlannedSet, Routine } from '../db/types';
+import type { DayPlan, PlannedSet, Routine, RoutineItem } from '../db/types';
 
 // Rutinas iniciales. «notation» guarda el texto original tal cual.
 // Lo confirmado por vos está en «note»; lo que falta confirmar, en «pending».
@@ -322,6 +322,91 @@ export const ROUTINES: Routine[] = [
     ],
   },
 ];
+
+/** Entrada en calor de las mañanas (mar–jue), como la hacés vos: 8 min de trote suave en cinta, ≈ 1 km. */
+const morningWarmup = (id: string): RoutineItem => ({
+  id,
+  exerciseId: 'trote-cinta',
+  notation: '8 min (≈ 1 km), trote suave',
+  sets: [{ durationSec: 8 * 60, distanceKm: 1 }],
+  restSec: 0,
+  short: { durationSec: 5 * 60 },
+  group: { id: 'calor', label: 'Entrada en calor' },
+});
+
+/**
+ * Mañanas de martes y jueves para ~40 min contando la entrada en calor (pedido tuyo, noviembre de 2026:
+ * tenés 45 min antes de ir a trabajar). Lo principal primero, con la misma carga en todas las series
+ * (no se pierde tiempo cambiando discos) y lo accesorio al final, opcional: si te sobra tiempo.
+ * Se aplican una sola vez en tu celular si esas rutinas seguían como venían (`applyRequestedChanges` en db.ts);
+ * «Volver a la versión original» trae las anteriores. El miércoles (cardio, 30–35 min) ya entra en el tiempo.
+ */
+export const MORNING_ROUTINES: Record<'tren-superior' | 'complementaria-jueves', Pick<Routine, 'notes' | 'items'>> = {
+  'tren-superior': {
+    notes: 'Para ~40 min con la entrada en calor. Misma carga en todas las series. Las elevaciones laterales, solo si te sobra tiempo.',
+    items: [
+      morningWarmup('m0'),
+      { id: 'm1', exerciseId: 'jalon-al-pecho', notation: '3 × 8–12', sets: range(3, 8, 12), restSec: 90, loadPattern: 'fija', short: { sets: 2 } },
+      {
+        id: 'm2',
+        exerciseId: 'press-inclinado-mancuernas',
+        notation: '2 × 8–12',
+        sets: range(2, 8, 12),
+        restSec: 90,
+        loadPattern: 'fija',
+        short: { sets: 2 },
+      },
+      { id: 'm3', exerciseId: 'remo-sentado-polea', notation: '2 × 10–12', sets: range(2, 10, 12), restSec: 90, loadPattern: 'fija', short: { sets: 2 } },
+      {
+        id: 'm5',
+        exerciseId: 'rueda-abdominal',
+        notation: '2 × 8–10',
+        sets: range(2, 8, 10),
+        restSec: 60,
+        note: 'Reemplaza al dead bug, a tu pedido. Si no llegás a 8 con buena técnica, acortá el recorrido.',
+      },
+      {
+        id: 'm4',
+        exerciseId: 'elevaciones-laterales',
+        notation: '2 × 12–15',
+        sets: range(2, 12, 15),
+        restSec: 60,
+        loadPattern: 'fija',
+        optional: true,
+        note: 'Si te sobra tiempo.',
+      },
+    ],
+  },
+  'complementaria-jueves': {
+    notes: 'Para ~40 min con la entrada en calor. Misma carga en todas las series. Se puede reducir si hay fatiga o si el sábado está cerca.',
+    items: [
+      morningWarmup('j0'),
+      { id: 'j1', exerciseId: 'curl-femoral-sentado', notation: '3 × 10–15', sets: range(3, 10, 15), restSec: 60, loadPattern: 'fija', short: { sets: 2 } },
+      { id: 'j2', exerciseId: 'press-pecho-maquina', notation: '2 × 8–12', sets: range(2, 8, 12), restSec: 90, loadPattern: 'fija', short: { sets: 2 } },
+      {
+        id: 'j4',
+        exerciseId: 'pallof-press',
+        notation: '2 × 10–12 por lado',
+        sets: range(2, 10, 12),
+        perSide: 'separado',
+        restSec: 60,
+        short: { sets: 2 },
+        note: 'Al terminar un lado, pasá al otro sin descanso.',
+      },
+      {
+        id: 'j3',
+        exerciseId: 'jalon-al-pecho',
+        variant: 'Agarre neutro',
+        notation: '2 × 10–12',
+        sets: range(2, 10, 12),
+        restSec: 90,
+        loadPattern: 'fija',
+        optional: true,
+        note: 'Si te sobra tiempo y estás recuperado.',
+      },
+    ],
+  },
+};
 
 export const WEEK_PLAN: DayPlan[] = [
   { weekday: 1, type: 'rutina', routineId: 'rutina-a', label: 'Rutina A', when: 'Noche' },

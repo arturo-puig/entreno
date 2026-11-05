@@ -7,6 +7,7 @@ import { applyUpdate, usePwa } from '../pwa';
 import type { Readiness, Routine, Session } from '../db/types';
 import { addDays, capitalize, dayAndMonth, startOfWeek, toISODate, weekdayLetter, weekdayName, parseISODate } from '../domain/dates';
 import { estimateRoutineMinutes } from '../domain/estimate';
+import { usePace } from '../db/pace';
 import { summarizeSets } from '../domain/format';
 import { hasShortVersion, itemsForMode, type Mode } from '../domain/plan';
 import { readinessAdvice, READINESS_OPTIONS } from '../domain/readiness';
@@ -35,6 +36,7 @@ export function Today() {
   const [cheer, setCheer] = useState<string | null>(null);
   const [driveSaved, setDriveSaved] = useState(false);
   const pwa = usePwa();
+  const pace = usePace();
 
   const data = useLiveQuery(async () => {
     const monday = startOfWeek(now);
@@ -88,7 +90,7 @@ export function Today() {
     planLabel: plan.label,
     routineName: routine?.name,
     exerciseCount: routine ? itemsForMode(routine, coachMode).length : undefined,
-    minutes: routine ? estimateRoutineMinutes(routine, coachMode) : undefined,
+    minutes: routine ? estimateRoutineMinutes(routine, coachMode, pace?.factor) : undefined,
     session: routineSession,
     activitiesToday: todaysActivities.map((a) => a.name),
   });
@@ -312,7 +314,7 @@ export function Today() {
                   <span className="row-main">
                     <span className="row-title">{r.name}</span>
                     <span className="row-sub">
-                      {originLabel(r)} · ≈ {estimateRoutineMinutes(r, 'completa')} min
+                      {originLabel(r)} · ≈ {estimateRoutineMinutes(r, 'completa', pace?.factor)} min
                     </span>
                   </span>
                   {r.id === routine?.id && <Icon name="check" className="row-check" />}
@@ -339,6 +341,7 @@ function RoutineDay(props: {
 }) {
   const { iso, routine, when, isOverride, readiness, hasLightOption, session, exerciseName } = props;
   const [starting, setStarting] = useState(false);
+  const pace = usePace();
   const canShorten = hasShortVersion(routine);
   const mode: Mode = session?.mode === 'corta' || (!session && props.short && canShorten) ? 'corta' : 'completa';
   const items = itemsForMode(routine, mode);
@@ -347,7 +350,7 @@ function RoutineDay(props: {
   const open = session?.status === 'en-curso';
   const finished = session && !open;
   const optionalCount = items.filter((i) => i.optional).length;
-  const minutes = estimateRoutineMinutes(routine, mode);
+  const minutes = estimateRoutineMinutes(routine, mode, pace?.factor);
   const advice = readiness ? readinessAdvice(readiness) : undefined;
   const pct = total ? Math.round((Math.min(doneExercises, total) / total) * 100) : 0;
 
@@ -410,7 +413,7 @@ function RoutineDay(props: {
               label="Tengo poco tiempo"
               description={
                 canShorten
-                  ? `Versión de ≈ ${estimateRoutineMinutes(routine, 'corta')} min. No cambia la rutina original.`
+                  ? `Versión de ≈ ${estimateRoutineMinutes(routine, 'corta', pace?.factor)} min. No cambia la rutina original.`
                   : 'Esta rutina no tiene versión corta.'
               }
             />

@@ -6,6 +6,7 @@ import type { DayPlan, Weekday } from '../db/types';
 import { WEEK_PLAN } from '../data/routines';
 import { capitalize, weekdayNameOf } from '../domain/dates';
 import { estimateRoutineMinutes } from '../domain/estimate';
+import { usePace } from '../db/pace';
 import { orderRoutines, WEEKDAYS_FROM_MONDAY } from '../domain/order';
 import { pendingQuestions } from '../domain/plan';
 import { navigate } from '../router';
@@ -15,6 +16,7 @@ import { Badge, Loading, ScreenHeader, Sheet, originLabel } from '../ui/common';
 export function Routines() {
   const [editingWeek, setEditingWeek] = useState(false);
   const [pickingDay, setPickingDay] = useState<Weekday | null>(null);
+  const pace = usePace();
   const data = useLiveQuery(async () => {
     const [weekPlan, routines, exercises] = await Promise.all([getWeekPlan(), db.routines.toArray(), db.exercises.toArray()]);
     return { weekPlan, routines, exercises };
@@ -70,7 +72,7 @@ export function Routines() {
                   <span className="row-title">{routine?.name ?? plan?.label ?? 'Descanso'}</span>
                   <span className="row-sub">
                     {routine
-                      ? `${[plan?.when, originLabel(routine)].filter(Boolean).join(' · ')} · ≈ ${estimateRoutineMinutes(routine, 'completa')} min`
+                      ? `${[plan?.when, originLabel(routine)].filter(Boolean).join(' · ')} · ≈ ${estimateRoutineMinutes(routine, 'completa', pace?.factor)} min`
                       : (plan?.detail ?? 'Sin entrenamiento')}
                   </span>
                 </span>
@@ -118,7 +120,7 @@ export function Routines() {
                   <span className="row-main">
                     <span className="row-title">{r.name}</span>
                     <span className="row-sub">
-                      {originLabel(r)} · ≈ {estimateRoutineMinutes(r, 'completa')} min
+                      {originLabel(r)} · ≈ {estimateRoutineMinutes(r, 'completa', pace?.factor)} min
                     </span>
                   </span>
                   <Icon name="chevron" className="row-chevron" size={18} />

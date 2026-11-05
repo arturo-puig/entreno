@@ -95,7 +95,11 @@ export function setHints(item: SessionItem, index: number, previous?: PreviousRe
   const planned: PlannedSet = item.sets[index]?.planned ?? {};
   const prev = previous?.sets[index] ?? previous?.sets[previous.sets.length - 1];
   const earlierWeight = [...item.sets.slice(0, index)].reverse().find((s) => s.done && s.weightKg !== undefined)?.weightKg;
-  const weightKg = prev?.weightKg ?? earlierWeight ?? (index === 0 ? item.plan?.referenceLoadKg : undefined);
+  // Misma carga en todas las series: se sugiere la de tu serie anterior de hoy (no hay que cambiar discos).
+  const weightKg =
+    item.plan?.loadPattern === 'fija'
+      ? (earlierWeight ?? previous?.sets[0]?.weightKg ?? item.plan.referenceLoadKg)
+      : (prev?.weightKg ?? earlierWeight ?? (index === 0 ? item.plan?.referenceLoadKg : undefined));
   const range = planned.repsMin !== undefined && planned.repsMax !== undefined ? `${planned.repsMin}–${planned.repsMax}` : undefined;
   return {
     weightKg,

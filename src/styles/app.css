@@ -1974,6 +1974,11 @@ select.input {
   min-height: 54px;
 }
 
+/* Antes de lo opcional: atrás (solo ícono), seguir con lo opcional y Terminar. */
+.session-bar.has-optional {
+  grid-template-columns: 54px 1fr 1fr;
+}
+
 .session-bar.is-timer {
   display: flex;
   align-items: center;

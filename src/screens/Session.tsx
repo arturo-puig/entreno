@@ -19,6 +19,7 @@ import { ExerciseMedia } from '../ui/ExerciseMedia';
 import { BodyMap } from '../ui/BodyMap';
 import { alertDone, primeAudio, useWakeLock } from '../ui/device';
 import { celebrate, coachLine, workElapsedMs, type CelebrationData } from '../domain/coach';
+import { estimateRemainingSeconds, personalPace } from '../domain/estimate';
 import { CARDIO_LIKE, isActivity, isQuickActivity, weekStats } from '../domain/stats';
 import { cardioRoutineOn } from '../domain/schedule';
 import { CoachBubble } from '../ui/Coach';
@@ -169,6 +170,8 @@ export function SessionScreen({ id }: { id: string }) {
   const fields = fieldsFor(exercise, item);
   const sum = summarize(session, new Date(now));
   const isLast = index === session.items.length - 1;
+  // Lo que sigue es todo opcional («si te sobra tiempo»): se puede terminar acá o seguir.
+  const onlyOptionalAfter = !isLast && active && session.items.slice(index + 1).every((it) => it.optional);
   const firstTime = !previous;
   // Se abre solo la primera vez que hacés un ejercicio de fuerza o movilidad (en cardio no hace falta).
   const showHow = howOpen[item.id] ?? (firstTime && exercise?.movement !== 'Cardio');
@@ -328,6 +331,15 @@ export function SessionScreen({ id }: { id: string }) {
   }
 
   const elapsed = session.startedAt ? (session.finishedAt ? new Date(session.finishedAt).getTime() : now) - new Date(session.startedAt).getTime() : 0;
+  // Cuánto falta, con tu ritmo real: para decidir a tiempo si llegás a lo opcional.
+  const remaining = active && !backfill ? estimateRemainingSeconds(session, personalPace(data.sessions)?.factor) : undefined;
+  const remainingText = !remaining
+    ? ''
+    : remaining.required >= 30
+      ? ` · faltan ≈ ${Math.round(remaining.required / 60) || 1} min`
+      : remaining.optional >= 30
+        ? ` · lo opcional ≈ ${Math.round(remaining.optional / 60) || 1} min`
+        : '';
 
   return (
     <div className={`session${pad ? ' has-pad' : ''}`}>
@@ -344,6 +356,7 @@ export function SessionScreen({ id }: { id: string }) {
           <span className="session-top-sub">
             Ejercicio {index + 1} de {session.items.length} ·{' '}
             {backfill || !active ? dateLabel(session.date) : formatClock(elapsed)}
+            {remainingText}
             {backfill && ' · en papel'}
             {!active && ` · ${session.status === 'completa' ? 'completa' : 'incompleta'}`}
           </span>
@@ -399,7 +412,8 @@ export function SessionScreen({ id }: { id: string }) {
         {item.plan && (
           <p className="ex-plan">
             <span className="ex-plan-label">Plan</span> {summarizeSets(item.plan, session.mode === 'corta' ? 'corta' : 'completa')}
-            {item.plan.loadPattern && ' · subiendo el peso'}
+            {item.plan.loadPattern === 'ascendente' && ' · subiendo el peso'}
+            {item.plan.loadPattern === 'fija' && ' · misma carga en todas las series'}
             {item.plan.restSec > 0 && ` · descanso ${formatRest(item.plan.restSec)}`}
             {item.optional && ' · opcional'}
           </p>
@@ -574,12 +588,23 @@ export function SessionScreen({ id }: { id: string }) {
           </button>
         </div>
       ) : (
-        <div className={`session-bar${restEnded ? ' is-alert' : ''}`}>
+        <div className={`session-bar${restEnded ? ' is-alert' : ''}${onlyOptionalAfter ? ' has-optional' : ''}`}>
           {restEnded && <span className="rest-done" role="status">Descanso terminado</span>}
-          <button className="btn" onClick={() => goTo(index - 1)} disabled={index === 0}>
-            <Icon name="back" size={20} /> Anterior
-          </button>
-          {isLast ? (
+          {onlyOptionalAfter ? (
+            <>
+              <button className="btn" onClick={() => goTo(index - 1)} disabled={index === 0} aria-label="Anterior">
+                <Icon name="back" size={20} />
+              </button>
+              <button className="btn" onClick={() => goTo(index + 1)}>
+                Opcional <Icon name="chevron" size={20} />
+              </button>
+            </>
+          ) : (
+            <button className="btn" onClick={() => goTo(index - 1)} disabled={index === 0}>
+              <Icon name="back" size={20} /> Anterior
+            </button>
+          )}
+          {isLast || onlyOptionalAfter ? (
             <button className="btn btn-primary" onClick={() => (active ? setSheet('terminar') : switchTab('/progreso'))}>
               {active ? (backfill ? 'Guardar' : 'Terminar') : 'Listo'}
             </button>
