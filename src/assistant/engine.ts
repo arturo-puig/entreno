@@ -2,6 +2,7 @@ import type { BodyMetric, DayPlan, DayState, Exercise, Routine, Session } from '
 import { illustrationsFor } from '../data/media';
 import { capitalize, parseISODate, toISODate, weekdayName, weekdayNameOf } from '../domain/dates';
 import { estimateRoutineMinutes, personalPace } from '../domain/estimate';
+import { modeForDay } from '../domain/daytime';
 import { formatLoggedSet } from '../domain/format';
 import { WEEKDAYS_FROM_MONDAY } from '../domain/order';
 import { hasShortVersion, itemsForMode, pendingQuestions, type Mode } from '../domain/plan';
@@ -191,13 +192,15 @@ export function respond(
           chips: isToday ? [say('Anotar una actividad', 'Anotá una caminata'), say('¿Qué tengo esta semana?')] : [say('¿Qué toca hoy?')],
         };
       }
-      const mode: Mode = isToday && ctx.day?.short && hasShortVersion(r) ? 'corta' : 'completa';
+      // Completa o corta: lo que elegiste hoy o, si no, lo que entra en el tiempo que tenés ese día.
+      const choice = modeForDay({ routine: r, plan: p, day: isToday ? ctx.day : undefined, factor: personalPace(ctx.sessions)?.factor });
+      const mode: Mode = choice.mode;
       const items = itemsForMode(r, mode);
       const names = items.map((i) => ctx.exercises.find((e) => e.id === i.exerciseId)?.name ?? '').filter(Boolean);
       const open = isToday && ctx.sessions.find((s) => s.date === iso && s.routineId === r.id && s.status === 'en-curso');
       return {
         ...base,
-        text: `${label} toca ${r.name}${mode === 'corta' ? ' (versión corta)' : ''}: ${items.length} ejercicios, ≈ ${estimateRoutineMinutes(r, mode, personalPace(ctx.sessions)?.factor)} min.`,
+        text: `${label} toca ${r.name}${mode === 'corta' ? (choice.auto ? `, en versión corta porque tenés ${choice.budget} min` : ' (versión corta)') : ''}: ${items.length} ejercicios, ≈ ${estimateRoutineMinutes(r, mode, personalPace(ctx.sessions)?.factor)} min.`,
         lines: [names.join(' · ')],
         buttons: isToday
           ? open

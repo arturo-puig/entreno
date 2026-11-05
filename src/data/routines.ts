@@ -410,9 +410,9 @@ export const MORNING_ROUTINES: Record<'tren-superior' | 'complementaria-jueves',
 
 export const WEEK_PLAN: DayPlan[] = [
   { weekday: 1, type: 'rutina', routineId: 'rutina-a', label: 'Rutina A', when: 'Noche' },
-  { weekday: 2, type: 'rutina', routineId: 'tren-superior', label: 'Tren superior', when: 'Mañana' },
-  { weekday: 3, type: 'rutina', routineId: 'cardio-movilidad', label: 'Cardio y movilidad', when: 'Mañana' },
-  { weekday: 4, type: 'rutina', routineId: 'complementaria-jueves', label: 'Complementaria', when: 'Mañana' },
+  { weekday: 2, type: 'rutina', routineId: 'tren-superior', label: 'Tren superior', when: 'Mañana', minutes: 45 },
+  { weekday: 3, type: 'rutina', routineId: 'cardio-movilidad', label: 'Cardio y movilidad', when: 'Mañana', minutes: 45 },
+  { weekday: 4, type: 'rutina', routineId: 'complementaria-jueves', label: 'Complementaria', when: 'Mañana', minutes: 45 },
   {
     weekday: 5,
     type: 'actividad',
@@ -420,6 +420,7 @@ export const WEEK_PLAN: DayPlan[] = [
     when: 'Noche',
     detail: 'Bicicleta de ida y vuelta cuando se pueda. Gimnasio por la mañana: opcional, solo si estás recuperado.',
     optionalGym: true,
+    minutes: 45,
   },
   { weekday: 6, type: 'rutina', routineId: 'rutina-b', label: 'Rutina B', when: 'Mediodía' },
   { weekday: 0, type: 'descanso', label: 'Descanso', detail: 'Sin entrenamiento. Caminata suave opcional.' },

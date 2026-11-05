@@ -8,6 +8,7 @@ import type { Readiness, Routine, Session } from '../db/types';
 import { addDays, capitalize, dayAndMonth, startOfWeek, toISODate, weekdayLetter, weekdayName, parseISODate } from '../domain/dates';
 import { estimateRoutineMinutes } from '../domain/estimate';
 import { usePace } from '../db/pace';
+import { modeForDay, roundMinutes, type DayChoice } from '../domain/daytime';
 import { summarizeSets } from '../domain/format';
 import { hasShortVersion, itemsForMode, type Mode } from '../domain/plan';
 import { readinessAdvice, READINESS_OPTIONS } from '../domain/readiness';
@@ -83,12 +84,15 @@ export function Today() {
   const suggestedActivity = plan.type === 'actividad' && /p[aá]del/i.test(plan.label) ? 'padel' : plan.type === 'descanso' ? 'caminata' : undefined;
 
   // El asistente te recibe: qué toca, qué está en curso o qué ya hiciste.
-  const coachMode: Mode = day?.short && routine && hasShortVersion(routine) ? 'corta' : 'completa';
+  // Completa o corta según lo que elegiste y el tiempo que tenés hoy (martes a viernes, 45 min).
+  const choice = routine ? modeForDay({ routine, plan, day, factor: pace?.factor }) : undefined;
+  const coachMode: Mode = choice?.mode ?? 'completa';
+  const suggestionChoice = suggestion ? modeForDay({ routine: suggestion, plan, factor: pace?.factor }) : undefined;
   const coach = todayLine({
     now,
     planType: plan.type,
     planLabel: plan.label,
-    routineName: routine?.name,
+    routineName: routine && coachMode === 'corta' ? `${routine.name} en versión corta` : routine?.name,
     exerciseCount: routine ? itemsForMode(routine, coachMode).length : undefined,
     minutes: routine ? estimateRoutineMinutes(routine, coachMode, pace?.factor) : undefined,
     session: routineSession,
@@ -110,7 +114,7 @@ export function Today() {
         : [];
 
   const choose = async (r: Routine) => {
-    await updateDayState(iso, { routineId: r.id === plan.routineId ? undefined : r.id, short: false });
+    await updateDayState(iso, { routineId: r.id === plan.routineId ? undefined : r.id, short: undefined });
     setPicking(false);
   };
 
@@ -176,10 +180,13 @@ export function Today() {
           <div>
             <p>
               Esta semana todavía no hiciste la <strong>{suggestion.name}</strong>. Si querés, podés hacerla hoy en
-              lugar de lo planificado.
+              lugar de lo planificado
+              {suggestionChoice?.auto
+                ? `: en versión corta (≈ ${roundMinutes(suggestionChoice.needed)} min con la entrada en calor), porque hoy tenés ${suggestionChoice.budget}.`
+                : '.'}
             </p>
             <div className="notice-actions">
-              <button className="btn btn-sm btn-primary" onClick={() => updateDayState(iso, { routineId: suggestion.id, short: false })}>
+              <button className="btn btn-sm btn-primary" onClick={() => updateDayState(iso, { routineId: suggestion.id, short: undefined })}>
                 Hacer {suggestion.name} hoy
               </button>
               <button className="btn btn-sm btn-ghost" onClick={() => updateDayState(iso, { dismissedSuggestion: true })}>
@@ -196,7 +203,7 @@ export function Today() {
           routine={routine}
           when={isOverride ? undefined : plan.when}
           isOverride={isOverride}
-          short={!!day?.short}
+          choice={choice!}
           readiness={day?.readiness}
           hasLightOption={routines.some((r) => r.id === LIGHT_ROUTINE_ID) && routine.id !== LIGHT_ROUTINE_ID}
           session={routineSession}
@@ -236,7 +243,7 @@ export function Today() {
           {!routine && plan.optionalGym ? 'Elegir rutina para la mañana (opcional)' : 'Hacer otra rutina hoy'}
         </button>
         {isOverride && (
-          <button className="btn btn-ghost btn-block" onClick={() => updateDayState(iso, { routineId: undefined, short: false })}>
+          <button className="btn btn-ghost btn-block" onClick={() => updateDayState(iso, { routineId: undefined, short: undefined })}>
             Volver a lo planificado: {plan.label}
           </button>
         )}
@@ -314,7 +321,7 @@ export function Today() {
                   <span className="row-main">
                     <span className="row-title">{r.name}</span>
                     <span className="row-sub">
-                      {originLabel(r)} · ≈ {estimateRoutineMinutes(r, 'completa', pace?.factor)} min
+                      {originLabel(r)} · {pickLabel(modeForDay({ routine: r, plan, factor: pace?.factor }))}
                     </span>
                   </span>
                   {r.id === routine?.id && <Icon name="check" className="row-check" />}
@@ -333,7 +340,8 @@ function RoutineDay(props: {
   routine: Routine;
   when?: string;
   isOverride: boolean;
-  short: boolean;
+  /** Completa o corta hoy (lo que elegiste o lo que entra en tu tiempo). */
+  choice: DayChoice;
   readiness?: Readiness;
   hasLightOption: boolean;
   session?: Session;
@@ -343,7 +351,8 @@ function RoutineDay(props: {
   const [starting, setStarting] = useState(false);
   const pace = usePace();
   const canShorten = hasShortVersion(routine);
-  const mode: Mode = session?.mode === 'corta' || (!session && props.short && canShorten) ? 'corta' : 'completa';
+  const { choice } = props;
+  const mode: Mode = session ? (session.mode === 'corta' ? 'corta' : 'completa') : choice.mode;
   const items = itemsForMode(routine, mode);
   const total = session ? session.items.length : items.length;
   const doneExercises = session ? session.items.filter((i) => i.sets.some((x) => x.done)).length : 0;
@@ -377,6 +386,13 @@ function RoutineDay(props: {
             {optionalCount > 0 && ` (${optionalCount} opcional)`}
           </span>
         </div>
+        {choice.budget !== undefined && !session && (
+          <p className={`hint${choice.needed > choice.budget ? ' warn-text' : ''}`}>
+            {choice.needed > choice.budget
+              ? `Con la entrada en calor lleva ≈ ${roundMinutes(choice.needed)} min y hoy tenés ${choice.budget}: hacé hasta donde llegues, igual suma.`
+              : `Hoy tenés ${choice.budget} min: con la entrada en calor, ≈ ${roundMinutes(choice.needed)}.`}
+          </p>
+        )}
         <div className="progress" aria-label={`Progreso: ${doneExercises} de ${total} ejercicios`}>
           <div className="progress-bar">
             <span style={{ width: `${pct}%` }} />
@@ -412,9 +428,11 @@ function RoutineDay(props: {
               onChange={(v) => updateDayState(iso, { short: v })}
               label="Tengo poco tiempo"
               description={
-                canShorten
-                  ? `Versión de ≈ ${estimateRoutineMinutes(routine, 'corta', pace?.factor)} min. No cambia la rutina original.`
-                  : 'Esta rutina no tiene versión corta.'
+                !canShorten
+                  ? 'Esta rutina no tiene versión corta.'
+                  : choice.auto
+                    ? `Hoy tenés ${choice.budget} min y la completa lleva ≈ ${roundMinutes(choice.fullNeeded)} con la entrada en calor: va la corta. Si te alcanza el tiempo, desactivalo.`
+                    : `Versión de ≈ ${estimateRoutineMinutes(routine, 'corta', pace?.factor)} min. No cambia la rutina original.`
               }
             />
           </>
@@ -526,4 +544,10 @@ function WeekStrip({ week }: { week: WeekDay[] }) {
       <p className="hint">Si un día no entrenás, no se acumula: la app sigue con lo que toca.</p>
     </section>
   );
+}
+
+/** En «¿Qué querés hacer hoy?»: lo que te llevaría cada rutina hoy, con tu tiempo. */
+function pickLabel(c: DayChoice): string {
+  if (c.budget === undefined) return `≈ ${roundMinutes(c.needed)} min`;
+  return `≈ ${roundMinutes(c.needed)} min con la entrada en calor${c.auto ? ' (versión corta)' : ''}`;
 }

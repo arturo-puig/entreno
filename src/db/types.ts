@@ -130,6 +130,8 @@ export interface DayPlan {
   detail?: string;
   /** Se puede elegir una rutina opcional ese día (p. ej. viernes por la mañana) */
   optionalGym?: boolean;
+  /** Minutos que tenés ese día para entrenar, con la entrada en calor. Sin dato = sin límite. */
+  minutes?: number;
 }
 
 export type Readiness = 'bien' | 'cansado' | 'muy-fatigado';

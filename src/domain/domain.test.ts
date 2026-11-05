@@ -254,3 +254,40 @@ describe('tu ritmo real', () => {
     expect(estimateRemainingSeconds(s, 1.3).required).toBeGreaterThan(estimateRemainingSeconds(s).required);
   });
 });
+
+describe('tiempo de cada día', async () => {
+  const { modeForDay, minutesNeeded } = await import('./daytime');
+  const tuesday = WEEK_PLAN.find((d) => d.weekday === 2)!;
+  const monday = WEEK_PLAN.find((d) => d.weekday === 1)!;
+  const rutinaA = routine('rutina-a');
+
+  it('martes a viernes tenés 45 min; lunes y sábado, sin límite', () => {
+    expect(WEEK_PLAN.filter((d) => d.minutes === 45).map((d) => d.weekday)).toEqual([2, 3, 4, 5]);
+    expect(WEEK_PLAN.find((d) => d.weekday === 6)!.minutes).toBeUndefined();
+  });
+
+  it('recuperar la Rutina A un martes: va la versión corta sola (la completa no entra)', () => {
+    const c = modeForDay({ routine: rutinaA, plan: tuesday });
+    expect(c).toMatchObject({ mode: 'corta', auto: true, budget: 45 });
+    expect(c.fullNeeded).toBeGreaterThan(45);
+    expect(c.needed).toBeLessThanOrEqual(45);
+    // Se suma tu entrada en calor (la Rutina A corta no la trae).
+    expect(c.needed).toBeCloseTo(minutesNeeded(rutinaA, 'corta') + 9, 5);
+  });
+
+  it('lo que elegiste manda: «Tengo poco tiempo» apagado = completa aunque no entre', () => {
+    expect(modeForDay({ routine: rutinaA, plan: tuesday, day: { short: false } })).toMatchObject({ mode: 'completa', auto: false });
+    expect(modeForDay({ routine: rutinaA, plan: monday, day: { short: true } })).toMatchObject({ mode: 'corta', auto: false });
+  });
+
+  it('el lunes (sin límite) la Rutina A va completa', () => {
+    expect(modeForDay({ routine: rutinaA, plan: monday })).toMatchObject({ mode: 'completa', auto: false, budget: undefined });
+  });
+
+  it('las mañanas nuevas entran completas (ya traen la entrada en calor)', () => {
+    const r = { ...routine('tren-superior'), ...MORNING_ROUTINES['tren-superior'] };
+    const c = modeForDay({ routine: r, plan: tuesday });
+    expect(c.mode).toBe('completa');
+    expect(c.needed).toBeCloseTo(minutesNeeded(r, 'completa'), 5);
+  });
+});

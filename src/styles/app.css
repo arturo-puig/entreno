@@ -1557,6 +1557,11 @@ select.input {
   font-variant-numeric: tabular-nums;
 }
 
+/* Aviso de que la rutina no entra en el tiempo del día. */
+.hint.warn-text {
+  color: var(--warn-text);
+}
+
 /* Rótulo fijo sobre lo generado con IA (con lugar arriba para que no tape la imagen). */
 .media-illustration.has-tag img {
   padding-top: 42px;

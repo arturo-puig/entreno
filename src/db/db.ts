@@ -36,7 +36,7 @@ export class EntrenoDB extends Dexie {
 export const db = new EntrenoDB();
 
 /** Subir este número cuando se agreguen ejercicios, rutinas o variantes a la carga inicial. */
-export const SEED_REVISION = 6;
+export const SEED_REVISION = 7;
 
 /**
  * Agrega lo que falte de la carga inicial sin pisar nada que ya exista,
@@ -86,6 +86,15 @@ async function mergeVariants(database: EntrenoDB, seed: Exercise[]) {
  * si el ejercicio todavía la tiene tal cual, pasa a la nueva; si la editaste, no se toca.
  */
 const PREVIOUS_SEED_TEXT: Record<string, Pick<Exercise, 'instructions' | 'instructionsNote' | 'commonErrors'>> = {
+  'plancha-lateral-rotacion': {
+    instructions: [
+      'Apoyá el antebrazo con el codo debajo del hombro y elevá la cadera hasta alinear cabeza, tronco y piernas.',
+      'Llevá el brazo libre hacia el techo.',
+      'Rotá el tronco pasando esa mano por debajo del cuerpo y volvé a abrir, sin dejar caer la cadera.',
+    ],
+    instructionsNote: 'Descripción estándar; validala con tu profe.',
+    commonErrors: ['Dejar caer la cadera.', 'Codo adelantado respecto del hombro.', 'Rotar con impulso en lugar de controlar el movimiento.'],
+  },
   'manguito-rotador-banda': {
     instructions: [
       'Pisá la banda con el pie derecho.',
@@ -165,6 +174,16 @@ const REQUESTED_CHANGES: { id: string; since: number; apply: (database: EntrenoD
         const items = structuredClone(next.items).map((i) => (backups.has(i.id) ? { ...i, backupExerciseId: backups.get(i.id) } : i));
         await database.routines.put(withNewVersion({ ...r, notes: next.notes, items }));
       }
+    },
+  },
+  {
+    // Noviembre de 2026: martes a viernes tenés 45 min por la mañana; lunes y sábados, sin límite.
+    id: 'tiempo-mananas',
+    since: 7,
+    apply: async (database) => {
+      const plan = await getWeekPlan(database);
+      const next = plan.map((d) => ([2, 3, 4, 5].includes(d.weekday) && d.minutes === undefined ? { ...d, minutes: 45 } : d));
+      await database.meta.put({ key: 'weekPlan', value: next });
     },
   },
 ];

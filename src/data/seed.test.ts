@@ -132,7 +132,7 @@ describe('actualización de la carga inicial', () => {
       expect(r.items, id).toEqual(MORNING_ROUTINES[id].items);
       expect(r.notes, id).toBe(MORNING_ROUTINES[id].notes);
     }
-    expect((await a.meta.get('requestedChanges'))?.value).toEqual(['rueda-abdominal', 'mananas-40-min']);
+    expect((await a.meta.get('requestedChanges'))?.value).toEqual(['rueda-abdominal', 'mananas-40-min', 'tiempo-mananas']);
     a.close();
   });
 
@@ -196,5 +196,23 @@ describe('actualización de la carga inicial', () => {
     await ensureSeed(b);
     expect((await b.exercises.get('manguito-rotador-banda'))?.instructions).toEqual(['Mi versión']);
     b.close();
+  });
+});
+
+describe('tiempo de las mañanas', () => {
+  it('a tu semana guardada se le suman los 45 min de martes a viernes, sin tocar el resto', async () => {
+    const a = new EntrenoDB(`test-${Math.random()}`);
+    await ensureSeed(a);
+    const old = structuredClone(WEEK_PLAN).map(({ minutes: _m, ...d }) => d);
+    old.find((d) => d.weekday === 3)!.label = 'Mi miércoles';
+    await a.meta.put({ key: 'weekPlan', value: old });
+    await a.meta.put({ key: 'seedRevision', value: 6 });
+    await a.meta.put({ key: 'requestedChanges', value: ['rueda-abdominal', 'mananas-40-min'] });
+    await ensureSeed(a);
+    const plan = (await a.meta.get('weekPlan'))!.value as typeof WEEK_PLAN;
+    expect(plan.filter((d) => d.minutes === 45).map((d) => d.weekday)).toEqual([2, 3, 4, 5]);
+    expect(plan.find((d) => d.weekday === 3)!.label).toBe('Mi miércoles');
+    expect(plan.find((d) => d.weekday === 1)!.minutes).toBeUndefined();
+    a.close();
   });
 });

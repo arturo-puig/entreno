@@ -100,7 +100,7 @@ export const EXERCISES: Exercise[] = [
       'Llevá el brazo libre hacia el techo.',
       'Rotá el tronco pasando esa mano por debajo del cuerpo y volvé a abrir, sin dejar caer la cadera.',
     ],
-    instructionsNote: STD,
+    instructionsNote: 'Sobre el antebrazo, como la hacés vos. El resto es una descripción estándar: validala con tu profe.',
     commonErrors: [
       'Dejar caer la cadera.',
       'Codo adelantado respecto del hombro.',

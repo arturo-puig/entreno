@@ -495,6 +495,9 @@ try {
     await page.getByRole('link', { name: 'Hoy' }).click();
     await page.getByRole('button', { name: 'Hacer otra rutina hoy' }).click();
     await page.getByRole('dialog').getByRole('button', { name: /Rutina A/ }).click();
+    // Es martes (45 min): la A va sola en versión corta; para esta prueba, la completa.
+    check('otra rutina un martes: la Rutina A va en versión corta', await page.getByRole('switch', { name: /Tengo poco tiempo/ }).isChecked());
+    await page.getByRole('switch', { name: /Tengo poco tiempo/ }).click();
     await page.getByRole('button', { name: 'Comenzar' }).click();
     await page.getByRole('button', { name: 'Lista de ejercicios' }).click();
     await page.getByRole('dialog').getByRole('button', { name: /Sentadilla isométrica/ }).click();
@@ -994,7 +997,8 @@ try {
     const { context, page, errors } = await openAt('2026-10-27T08:00:00-03:00');
     check('martes: Tren superior complementaria', await has(page, 'Tren superior', 'complementaria'));
     check('hoy: el asistente saluda con lo que toca', await has(page, 'Buen día. Hoy toca Tren superior: 6 ejercicios, ≈ 35 min.'));
-    check('martes: sugiere hacer la Rutina A', await has(page, 'todavía no hiciste la'));
+    check('martes: tenés 45 min y la complementaria entra', await has(page, 'Hoy tenés 45 min: con la entrada en calor, ≈ 35.'));
+    check('martes: sugiere hacer la Rutina A, en versión corta por el tiempo', await has(page, 'todavía no hiciste la', 'en versión corta', 'porque hoy tenés 45'));
     await shot(page, '09-hoy-martes-sugerencia');
     await page.getByRole('button', { name: 'Hacer Rutina A hoy' }).click();
     await has(page, 'Elegida para hoy');
@@ -1002,6 +1006,17 @@ try {
     check(
       'martes: la elección persiste tras recargar',
       (await has(page, 'Elegida para hoy', 'Sentadilla en Smith')) && !(await page.getByText('todavía no hiciste la').count()),
+    );
+    check(
+      'martes: la Rutina A va sola en versión corta (la completa no entra en 45 min)',
+      (await page.getByRole('switch', { name: /Tengo poco tiempo/ }).isChecked()) &&
+        (await has(page, 'Hoy toca Rutina A en versión corta', 'la completa lleva', 'va la corta', '3 ejercicios')),
+    );
+    await shot(page, '42-martes-rutina-a-corta');
+    await page.getByRole('switch', { name: /Tengo poco tiempo/ }).click();
+    check(
+      'martes: si la querés completa, se puede (avisa que no entra)',
+      (await has(page, '9 ejercicios', 'hacé hasta donde llegues')) && !(await page.getByRole('switch', { name: /Tengo poco tiempo/ }).isChecked()),
     );
     check('martes: sin errores en consola', errors.length === 0, errors.join(' | '));
     await context.close();

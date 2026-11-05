@@ -72,7 +72,7 @@ export function Routines() {
                   <span className="row-title">{routine?.name ?? plan?.label ?? 'Descanso'}</span>
                   <span className="row-sub">
                     {routine
-                      ? `${[plan?.when, originLabel(routine)].filter(Boolean).join(' · ')} · ≈ ${estimateRoutineMinutes(routine, 'completa', pace?.factor)} min`
+                      ? `${[plan?.when, originLabel(routine)].filter(Boolean).join(' · ')} · ≈ ${estimateRoutineMinutes(routine, 'completa', pace?.factor)} min${plan?.minutes ? ` · tenés ${plan.minutes}` : ''}`
                       : (plan?.detail ?? 'Sin entrenamiento')}
                   </span>
                 </span>
@@ -89,6 +89,7 @@ export function Routines() {
                     <span className="row-day">{dayLabel}</span>
                     <span className="row-main">
                       <span className="row-title">{routine?.name ?? plan?.label ?? 'Descanso'}</span>
+                      <span className="row-sub">{plan?.minutes ? `Tenés ${plan.minutes} min` : 'Sin límite de tiempo'}</span>
                     </span>
                     <Icon name="edit" className="row-chevron" size={18} />
                   </button>
@@ -178,6 +179,8 @@ export function Routines() {
   );
 }
 
+const TIME_OPTIONS: (number | undefined)[] = [undefined, 30, 40, 45, 60, 75, 90];
+
 function DayPicker(props: {
   weekday: Weekday;
   current?: DayPlan;
@@ -196,12 +199,25 @@ function DayPicker(props: {
 
   return (
     <Sheet title={`¿Qué hacés el ${weekdayNameOf(weekday)}?`} onClose={props.onClose}>
+      {current && current.type !== 'descanso' && (
+        <div className="stack-sm">
+          <p className="field-label">Tiempo que tenés ese día (con la entrada en calor)</p>
+          <div className="chips" role="group" aria-label="Tiempo que tenés ese día">
+            {TIME_OPTIONS.map((m) => (
+              <button key={m ?? 'libre'} className="chip-btn" aria-pressed={current.minutes === m} onClick={() => choose({ ...current, minutes: m })}>
+                {m ? `${m} min` : 'Sin límite'}
+              </button>
+            ))}
+          </div>
+          <p className="hint">Si la rutina no entra en ese tiempo, Hoy te propone la versión corta.</p>
+        </div>
+      )}
       <ul className="list">
         {props.options.map((r) => (
           <li key={r.id}>
             <button
               className="row"
-              onClick={() => choose({ weekday, type: 'rutina', routineId: r.id, label: r.name, when: current?.when })}
+              onClick={() => choose({ weekday, type: 'rutina', routineId: r.id, label: r.name, when: current?.when, minutes: current?.minutes })}
             >
               <span className="row-main">
                 <span className="row-title">{r.name}</span>
@@ -212,7 +228,7 @@ function DayPicker(props: {
         ))}
         {activities.map((a) => (
           <li key={a.label}>
-            <button className="row" onClick={() => choose({ ...a, weekday })}>
+            <button className="row" onClick={() => choose({ ...a, weekday, minutes: current?.minutes })}>
               <span className="row-main">
                 <span className="row-title">{a.label}</span>
                 <span className="row-sub">Actividad</span>
